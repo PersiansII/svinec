@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+      margin-top: 10px;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 15px;
+      padding: 15px;
+    }
+    .card {
+      background: #fff;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      padding: 10px;
+    }
+    .card.pending {
+      border-color: #ffa500;
+    }
+    .card.confirmed {
+      border-color: #4caf50;
+    }
+    .card h2 {
+      margin: 0;
+      font-size: 1.2em;
+    }
+    .card p {
+      margin: 5px 0;
+    }
+    .actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 5px;
+    }
+    .btn {
+      padding: 5px 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: white;
+    }
+    .accept-btn {
+      background-color: #4caf50;
+    }
+    .reject-btn {
+      background-color: #f44336;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rezervace (čekající a potvrzené)</h1>
+  <div class="container" id="reservations-container"></div>
+
+  <script>
+    async function fetchBookings() {
+      const pending = await fetch('/api/bookings/pending').then(res => res.json());
+      const confirmed = await fetch('/api/bookings/confirmed').then(res => res.json());
+      return { pending, confirmed };
+    }
+
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('cs-CZ');
+    }
+
+    function createCard(booking, type) {
+      const card = document.createElement('div');
+      card.className = 'card ' + type;
+
+      const rooms = booking.rooms.map(id => "Pokoj " + id).join(", ");
+
+      card.innerHTML = `
+        <h2>${booking.name}</h2>
+        <p><strong>Datum:</strong> ${formatDate(booking.startDate)} – ${formatDate(booking.endDate)}</p>
+        <p><strong>Pokoje:</strong> ${rooms}</p>
+        <p><strong>Osoby:</strong> ${booking.people}</p>
+        <p><strong>Pes:</strong> ${booking.dog ? "Ano" : "Ne"}</p>
+        <p><strong>Snídaně:</strong> ${booking.breakfast ? "Ano" : "Ne"}</p>
+        <p><strong>Email:</strong> ${booking.email}</p>
+        <p><strong>Telefon:</strong> ${booking.phone}</p>
+      `;
+
+      if (type === 'pending') {
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const acceptBtn = document.createElement('button');
+        acceptBtn.className = 'btn accept-btn';
+        acceptBtn.textContent = 'Potvrdit';
+        acceptBtn.onclick = () => handleAction(booking.id, 'accept');
+        const rejectBtn = document.createElement('button');
+        rejectBtn.className = 'btn reject-btn';
+        rejectBtn.textContent = 'Zamítnout';
+        rejectBtn.onclick = () => handleAction(booking.id, 'reject');
+        actions.appendChild(acceptBtn);
+        actions.appendChild(rejectBtn);
+        card.appendChild(actions);
+      }
+
+      return card;
+    }
+
+    async function handleAction(id, action) {
+  const response = await fetch(`/api/bookings/${id}/${action}`, { method: 'POST' });
+  if (response.ok) {
+    alert(`Rezervace byla ${action === 'accept' ? 'potvrzena' : 'zamítnuta'}.`);
+    location.reload();
+  } else {
+    const error = await response.json();
+    alert(error.message || 'Chyba při zpracování.');
+  }
+}
+
+
+    async function renderBookings() {
+      const container = document.getElementById('reservations-container');
+      const { pending, confirmed } = await fetchBookings();
+      pending.forEach(b => container.appendChild(createCard(b, 'pending')));
+      confirmed.forEach(b => container.appendChild(createCard(b, 'confirmed')));
+    }
+
+    renderBookings();
+  </script>
+</body>
+</html>
