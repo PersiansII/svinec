@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin Dashboard</title>
   <style>
     body {
@@ -14,6 +14,23 @@
     h1 {
       text-align: center;
       margin-top: 10px;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      margin: 10px 0;
+    }
+    .tab-btn {
+      padding: 10px 15px;
+      border: none;
+      border-bottom: 2px solid transparent;
+      background: #f0f0f0;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .tab-btn.active {
+      border-bottom: 2px solid #4caf50;
+      background: #fff;
     }
     .container {
       display: grid;
@@ -38,8 +55,9 @@
       margin: 0;
       font-size: 1.2em;
     }
-    .card p {
+    .card p, .card label {
       margin: 5px 0;
+      display: block;
     }
     .actions {
       margin-top: 10px;
@@ -59,80 +77,279 @@
     .reject-btn {
       background-color: #f44336;
     }
+    .cancel-btn {
+      background-color: #b71c1c;
+    }
+    .block-all-btn {
+      background-color: #3f51b5;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .block-all-btn:hover {
+      background-color: #303f9f;
+    }
+    img.room-photo {
+      width: 100%;
+      border-radius: 5px;
+      margin-bottom: 10px;
+    }
+    input[type="number"], input[type="file"] {
+      width: 100%;
+      padding: 5px;
+      margin: 3px 0 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
-  <h1>Rezervace (čekající a potvrzené)</h1>
-  <div class="container" id="reservations-container"></div>
+  <h1>Admin Dashboard</h1>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('rooms')">🏨 Pokoje</button>
+    <button class="tab-btn" onclick="showTab('common')">🕑 Společné prostory</button>
+    <button class="tab-btn" onclick="showTab('manage-rooms')">🛠️ Správa pokojů</button>
+  </div>
+
+  <!-- Blokovat celou chatu button -->
+  <div style="margin-bottom: 15px; text-align: center;">
+    <button class="btn block-all-btn" onclick="showBlockForm()">🏕️ Blokovat celou chatu</button>
+  </div>
+
+  <!-- Hidden form for blocking all -->
+  <div id="block-form" style="display:none; text-align: center; margin: 10px;">
+    <h3>Blokovat celou chatu</h3>
+    <label>Od: <input type="date" id="block-start"></label>
+    <label>Do: <input type="date" id="block-end"></label>
+    <button class="btn accept-btn" onclick="submitBlock()">Potvrdit</button>
+    <button class="btn reject-btn" onclick="hideBlockForm()">Zrušit</button>
+  </div>
+
+  <!-- Rooms Section -->
+  <div id="rooms-tab" class="container"></div>
+
+  <!-- Common Rooms Section -->
+  <div id="common-tab" class="container" style="display:none;"></div>
+
+  <!-- Manage Rooms Section -->
+  <div id="manage-rooms-tab" class="container" style="display:none;"></div>
 
   <script>
-    async function fetchBookings() {
-      const pending = await fetch('/api/bookings/pending').then(res => res.json());
-      const confirmed = await fetch('/api/bookings/confirmed').then(res => res.json());
+    function showTab(tab) {
+      document.getElementById('rooms-tab').style.display = (tab === 'rooms') ? 'grid' : 'none';
+      document.getElementById('common-tab').style.display = (tab === 'common') ? 'grid' : 'none';
+      document.getElementById('manage-rooms-tab').style.display = (tab === 'manage-rooms') ? 'grid' : 'none';
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelector(`.tab-btn[onclick="showTab('${tab}')"]`).classList.add('active');
+    }
+
+    async function fetchBookings(endpointPending, endpointConfirmed) {
+      const pending = await fetch(endpointPending).then(res => res.json());
+      const confirmed = await fetch(endpointConfirmed).then(res => res.json());
       return { pending, confirmed };
     }
 
-    function formatDate(dateStr) {
+    function formatDateTime(dateStr) {
       const date = new Date(dateStr);
-      return date.toLocaleDateString('cs-CZ');
+      return date.toLocaleString('cs-CZ');
     }
 
-    function createCard(booking, type) {
+    function createCard(booking, type, isCommon = false) {
       const card = document.createElement('div');
       card.className = 'card ' + type;
 
-      const rooms = booking.rooms.map(id => "Pokoj " + id).join(", ");
+      const roomInfo = isCommon
+        ? booking.rooms.map(id => getCommonRoomName(id)).join(", ")
+        : booking.rooms.map(id => "Pokoj " + id).join(", ");
 
       card.innerHTML = `
         <h2>${booking.name}</h2>
-        <p><strong>Datum:</strong> ${formatDate(booking.startDate)} – ${formatDate(booking.endDate)}</p>
-        <p><strong>Pokoje:</strong> ${rooms}</p>
+        <p><strong>Od:</strong> ${formatDateTime(booking.start || booking.startDate)}</p>
+        <p><strong>Do:</strong> ${formatDateTime(booking.end || booking.endDate)}</p>
+        <p><strong>${isCommon ? "Místnost" : "Pokoje"}:</strong> ${roomInfo}</p>
         <p><strong>Osoby:</strong> ${booking.people}</p>
-        <p><strong>Pes:</strong> ${booking.dog ? "Ano" : "Ne"}</p>
-        <p><strong>Snídaně:</strong> ${booking.breakfast ? "Ano" : "Ne"}</p>
+        ${!isCommon ? `<p><strong>Pes:</strong> ${booking.dog ? "Ano" : "Ne"}</p>` : ""}
+        ${!isCommon ? `<p><strong>Snídaně:</strong> ${booking.breakfast ? "Ano" : "Ne"}</p>` : ""}
         <p><strong>Email:</strong> ${booking.email}</p>
         <p><strong>Telefon:</strong> ${booking.phone}</p>
       `;
 
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+
       if (type === 'pending') {
-        const actions = document.createElement('div');
-        actions.className = 'actions';
         const acceptBtn = document.createElement('button');
         acceptBtn.className = 'btn accept-btn';
         acceptBtn.textContent = 'Potvrdit';
-        acceptBtn.onclick = () => handleAction(booking.id, 'accept');
+        acceptBtn.onclick = () => handleAction(booking.id, 'accept', isCommon);
+
         const rejectBtn = document.createElement('button');
         rejectBtn.className = 'btn reject-btn';
         rejectBtn.textContent = 'Zamítnout';
-        rejectBtn.onclick = () => handleAction(booking.id, 'reject');
+        rejectBtn.onclick = () => handleAction(booking.id, 'reject', isCommon);
+
         actions.appendChild(acceptBtn);
         actions.appendChild(rejectBtn);
-        card.appendChild(actions);
+      } else if (type === 'confirmed') {
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn cancel-btn';
+        cancelBtn.textContent = 'Zrušit';
+        cancelBtn.onclick = () => handleCancel(booking.id, isCommon);
+        actions.appendChild(cancelBtn);
       }
 
+      card.appendChild(actions);
       return card;
     }
 
-    async function handleAction(id, action) {
-  const response = await fetch(`/api/bookings/${id}/${action}`, { method: 'POST' });
-  if (response.ok) {
-    alert(`Rezervace byla ${action === 'accept' ? 'potvrzena' : 'zamítnuta'}.`);
-    location.reload();
-  } else {
-    const error = await response.json();
-    alert(error.message || 'Chyba při zpracování.');
-  }
-}
-
-
-    async function renderBookings() {
-      const container = document.getElementById('reservations-container');
-      const { pending, confirmed } = await fetchBookings();
-      pending.forEach(b => container.appendChild(createCard(b, 'pending')));
-      confirmed.forEach(b => container.appendChild(createCard(b, 'confirmed')));
+    async function handleAction(id, action, isCommon) {
+      const endpoint = isCommon
+        ? `/api/common-bookings/${id}/${action}`
+        : `/api/bookings/${id}/${action}`;
+      const response = await fetch(endpoint, { method: 'POST' });
+      if (response.ok) {
+        alert(`Rezervace byla ${action === 'accept' ? 'potvrzena' : 'zamítnuta'}.`);
+        renderAllBookings();
+      } else {
+        const error = await response.json();
+        alert(error.message || 'Chyba při zpracování.');
+      }
     }
 
-    renderBookings();
+    async function handleCancel(id, isCommon) {
+      if (!confirm('Opravdu chcete zrušit tuto rezervaci? Tato akce je nevratná.')) {
+        return;
+      }
+      const endpoint = isCommon
+        ? `/api/common-bookings/${id}/cancel`
+        : `/api/bookings/${id}/cancel`;
+      const response = await fetch(endpoint, { method: 'DELETE' });
+      if (response.ok) {
+        alert('Rezervace byla zrušena.');
+        renderAllBookings();
+      } else {
+        const error = await response.json();
+        alert(error.message || 'Chyba při rušení rezervace.');
+      }
+    }
+
+    async function renderBookings(containerId, pendingEndpoint, confirmedEndpoint, isCommon = false) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = ''; // Clear container
+      const { pending, confirmed } = await fetchBookings(pendingEndpoint, confirmedEndpoint);
+      pending.forEach(b => container.appendChild(createCard(b, 'pending', isCommon)));
+      confirmed.forEach(b => container.appendChild(createCard(b, 'confirmed', isCommon)));
+    }
+
+    function showBlockForm() {
+      document.getElementById('block-form').style.display = 'block';
+    }
+
+    function hideBlockForm() {
+      document.getElementById('block-form').style.display = 'none';
+    }
+
+    async function submitBlock() {
+      const start = document.getElementById('block-start').value;
+      const end = document.getElementById('block-end').value;
+
+      if (!start || !end) {
+        alert('Vyberte platné datum od-do.');
+        return;
+      }
+
+      if (!confirm(`Opravdu chcete blokovat celou chatu od ${start} do ${end}?`)) {
+        return;
+      }
+
+      const payload = { start, end };
+
+      const res = await fetch('/api/block-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        alert('Celá chata byla blokována.');
+        hideBlockForm();
+        renderAllBookings();
+      } else {
+        const error = await res.json();
+        alert(error.message || 'Chyba při blokování.');
+      }
+    }
+
+    async function renderAllBookings() {
+      await renderBookings('rooms-tab', '/api/bookings/pending', '/api/bookings/confirmed');
+      await renderBookings('common-tab', '/api/common-bookings/pending', '/api/common-bookings/confirmed', true);
+      await renderRoomManagement();
+    }
+
+    async function renderRoomManagement() {
+      const container = document.getElementById('manage-rooms-tab');
+      container.innerHTML = '';
+      const rooms = await fetch('/api/rooms').then(res => res.json());
+
+      rooms.forEach(room => {
+        const card = document.createElement('div');
+        card.className = 'card confirmed';
+
+        card.innerHTML = `
+          <h2>${room.name}</h2>
+          <img src="/images/rooms/${room.photo}" alt="${room.name}" class="room-photo">
+          <label>Cena za noc (CZK): <input type="number" value="${room.price}" id="price-${room.id}"></label>
+          <label>Počet lůžek: <input type="number" value="${room.beds}" id="beds-${room.id}"></label>
+          <label>Změnit foto: <input type="file" id="photo-${room.id}" accept="image/*"></label>
+          <button class="btn accept-btn" onclick="saveRoom(${room.id})">💾 Uložit změny</button>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    async function saveRoom(roomId) {
+      const price = document.getElementById(`price-${roomId}`).value;
+      const beds = document.getElementById(`beds-${roomId}`).value;
+      const photoInput = document.getElementById(`photo-${roomId}`);
+      const photoFile = photoInput.files[0];
+
+      const formData = new FormData();
+      formData.append('id', roomId);
+      formData.append('price', price);
+      formData.append('beds', beds);
+      if (photoFile) {
+        formData.append('photo', photoFile);
+      }
+
+      const res = await fetch('/api/rooms/update', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (res.ok) {
+        alert('Pokoj byl aktualizován.');
+        renderRoomManagement();
+      } else {
+        alert('Chyba při ukládání změn.');
+      }
+    }
+
+    let commonRoomsList = [];
+    async function loadCommonRooms() {
+      const res = await fetch('/api/common-rooms');
+      commonRoomsList = await res.json();
+    }
+    function getCommonRoomName(id) {
+      const room = commonRoomsList.find(r => r.id === id);
+      return room ? room.name : "Neznámá místnost";
+    }
+
+    // Initialize
+    loadCommonRooms().then(() => renderAllBookings());
   </script>
 </body>
 </html>

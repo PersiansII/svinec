@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rezervace společného prostoru</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    form {
+      background: #fff;
+      padding: 20px;
+      max-width: 500px;
+      margin: 0 auto;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 1rem;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      font-size: 1.1rem;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    #price {
+      font-weight: bold;
+      font-size: 1.2rem;
+      text-align: center;
+      margin-top: 10px;
+    }
+    #capacity-warning {
+      color: red;
+      font-weight: bold;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rezervace společného prostoru</h1>
+  <form id="common-booking-form">
+    <p id="room-name"></p>
+    <p id="room-capacity"></p>
+
+    <label for="start">Začátek rezervace:</label>
+    <input type="datetime-local" id="start" name="start" required />
+
+    <label for="end">Konec rezervace:</label>
+    <input type="datetime-local" id="end" name="end" required />
+
+    <label for="people">Počet osob:</label>
+    <input type="number" id="people" name="people" min="1" required />
+
+    <p id="capacity-warning">⚠️ Počet osob překračuje kapacitu této místnosti!</p>
+
+    <p id="price">Celková cena: 0 Kč</p>
+
+    <label for="name">Jméno:</label>
+    <input type="text" id="name" name="name" required />
+
+    <label for="email">Email:</label>
+    <input type="email" id="email" name="email" required
+           pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+           title="Zadejte platnou e-mailovou adresu" />
+
+    <label for="phone">Telefon:</label>
+    <input type="tel" id="phone" name="phone" required
+           pattern="^\+?\d{9,15}$"
+           title="Zadejte platné telefonní číslo (např. +420123456789)" />
+
+    <button type="submit">Odeslat rezervaci</button>
+  </form>
+
+  <script>
+    let roomId = null;
+    let roomData = null;
+
+    async function loadRoomDetails() {
+      const params = new URLSearchParams(window.location.search);
+      roomId = parseInt(params.get('room'), 10);
+      const date = params.get('date'); // Optional prefill
+
+      const res = await fetch('/api/common-rooms');
+      const rooms = await res.json();
+      roomData = rooms.find(r => r.id === roomId);
+
+      if (!roomData) {
+        alert('Společná místnost nenalezena.');
+        window.location.href = '/common.html';
+        return;
+      }
+
+      document.getElementById('room-name').textContent = `${roomData.name}`;
+      document.getElementById('room-capacity').textContent = `Kapacita: ${roomData.capacity} osob`;
+      if (date) {
+        document.getElementById('start').value = date + 'T08:00';
+        document.getElementById('end').value = date + 'T10:00';
+      }
+    }
+
+    function calculatePrice() {
+      const start = new Date(document.getElementById('start').value);
+      const end = new Date(document.getElementById('end').value);
+      const hours = (end - start) / (1000 * 60 * 60);
+      const people = parseInt(document.getElementById('people').value, 10);
+
+      const priceElem = document.getElementById('price');
+      const warning = document.getElementById('capacity-warning');
+
+      if (isNaN(hours) || hours <= 0) {
+        priceElem.textContent = 'Celková cena: 0 Kč';
+        return;
+      }
+
+      // Check capacity
+      if (people > roomData.capacity) {
+        warning.style.display = 'block';
+      } else {
+        warning.style.display = 'none';
+      }
+
+      const total = Math.ceil(hours) * roomData.pricePerHour;
+      priceElem.textContent = `Celková cena: ${total} Kč`;
+    }
+
+    document.getElementById('start').addEventListener('input', calculatePrice);
+    document.getElementById('end').addEventListener('input', calculatePrice);
+    document.getElementById('people').addEventListener('input', calculatePrice);
+
+    document.getElementById('common-booking-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (parseInt(document.getElementById('people').value, 10) > roomData.capacity) {
+        alert('Počet osob překračuje kapacitu této místnosti!');
+        return;
+      }
+
+      const payload = {
+        start: document.getElementById('start').value,
+        end: document.getElementById('end').value,
+        rooms: [roomId],
+        people: parseInt(document.getElementById('people').value, 10),
+        name: document.getElementById('name').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value
+      };
+
+      const res = await fetch('/api/common-bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        alert('Rezervace byla odeslána a čeká na potvrzení.');
+        window.location.href = '/common.html';
+      } else {
+        alert(result.message || 'Chyba při odesílání rezervace.');
+      }
+    });
+
+    loadRoomDetails();
+  </script>
+</body>
+</html>

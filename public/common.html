@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rezervace společných prostor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      text-align: center;
+      margin: 20px;
+    }
+    .date-picker {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .room {
+      background: #fff;
+      margin: 10px auto;
+      max-width: 600px;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .room h2 {
+      margin: 0 0 10px;
+    }
+    .hours {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 5px;
+      margin: 10px 0;
+    }
+    .hour {
+      padding: 5px;
+      color: white;
+      text-align: center;
+      border-radius: 5px;
+      font-size: 0.9rem;
+    }
+    .reserve-btn {
+      display: inline-block;
+      background: #2196F3;
+      color: white;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 5px;
+      text-decoration: none;
+      text-align: center;
+      cursor: pointer;
+    }
+    .reserve-btn:hover {
+      background: #1976D2;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rezervace společných prostor</h1>
+  <div class="date-picker">
+    <label for="date">Vyberte datum: </label>
+    <input type="date" id="date" />
+  </div>
+  <div id="rooms-container"></div>
+
+  <script>
+    let commonRooms = [];
+    let confirmedBookings = [];
+
+    async function loadRooms() {
+      const res = await fetch('/api/common-rooms');
+      commonRooms = await res.json();
+      await loadBookings();
+    }
+
+    async function loadBookings() {
+      const res = await fetch('/api/common-bookings/confirmed');
+      confirmedBookings = await res.json();
+      renderRooms();
+    }
+
+    function renderRooms() {
+      const container = document.getElementById('rooms-container');
+      container.innerHTML = '';
+      const selectedDate = document.getElementById('date').value;
+      if (!selectedDate) return;
+
+      commonRooms.forEach(room => {
+        const div = document.createElement('div');
+        div.className = 'room';
+
+        const title = document.createElement('h2');
+        title.textContent = `${room.name} (Kapacita: ${room.capacity} osob)`;
+        div.appendChild(title);
+
+        const hoursDiv = document.createElement('div');
+        hoursDiv.className = 'hours';
+
+        for (let hour = 8; hour <= 20; hour++) {
+          const hourDiv = document.createElement('div');
+          hourDiv.className = 'hour';
+
+          // Calculate total guests booked for this hour
+          let guestsBooked = 0;
+          confirmedBookings.forEach(booking => {
+            if (
+              booking.rooms.includes(room.id) &&
+              new Date(booking.start).toDateString() === new Date(selectedDate).toDateString()
+            ) {
+              const bookingStart = new Date(booking.start).getHours();
+              const bookingEnd = new Date(booking.end).getHours();
+              if (hour >= bookingStart && hour < bookingEnd) {
+                guestsBooked += booking.people;
+              }
+            }
+          });
+
+          // Calculate % full
+          const percentFull = (guestsBooked / room.capacity) * 100;
+
+          // Set color based on % full
+          if (percentFull >= 100) {
+  hourDiv.style.backgroundColor = '#f44336'; // 🔴 red
+} else if (percentFull >= 75) {
+  hourDiv.style.backgroundColor = '#ff5722'; // 🟧 dark orange
+} else if (percentFull >= 50) {
+  hourDiv.style.backgroundColor = '#ff9800'; // 🟠 orange
+} else if (percentFull >= 25) {
+  hourDiv.style.backgroundColor = '#ffeb3b'; // 🟡 yellow
+  hourDiv.style.color = '#000'; // Black text for yellow
+} else {
+  hourDiv.style.backgroundColor = '#4CAF50'; // 🟢 green
+}
+
+// Always show exact capacity
+hourDiv.textContent = `${hour}:00 (${guestsBooked}/${room.capacity})`;
+
+
+          // Show guests booked
+          hourDiv.textContent = `${hour}:00 (${guestsBooked}/${room.capacity})`;
+
+          hoursDiv.appendChild(hourDiv);
+        }
+
+        div.appendChild(hoursDiv);
+
+        const reserveBtn = document.createElement('a');
+        reserveBtn.className = 'reserve-btn';
+        reserveBtn.href = `/common-booking.html?room=${room.id}&date=${selectedDate}`;
+        reserveBtn.textContent = 'Rezervovat';
+        div.appendChild(reserveBtn);
+
+        container.appendChild(div);
+      });
+    }
+
+    document.getElementById('date').addEventListener('change', renderRooms);
+
+    loadRooms();
+  </script>
+</body>
+</html>
