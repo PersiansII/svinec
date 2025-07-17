@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rezervace ubytování</title>
+  <link rel="stylesheet" href="booking.css" />
+</head>
+<body>
+  <h1>Rezervace ubytování</h1>
+  <form id="booking-form">
+    <label for="startDate">Datum příjezdu:</label>
+    <input type="date" id="startDate" name="startDate" required><br>
+
+    <label for="endDate">Datum odjezdu:</label>
+    <input type="date" id="endDate" name="endDate" required><br>
+
+    <label for="rooms">Vyberte pokoje:</label>
+    <div id="rooms-container"></div>
+
+    <label for="people">Počet osob:</label>
+    <input type="number" id="people" name="people" min="1" required><br>
+
+    <label>
+      <input type="checkbox" id="dog" name="dog" />
+      🐶 Se psem (za příplatek)
+    </label><br>
+
+    <label>
+      <input type="checkbox" id="breakfast" name="breakfast" />
+      🍳 Snídaně (za příplatek)
+    </label><br>
+
+    <p id="beds-warning" style="color: red; display: none;">
+      ⚠️ Počet lůžek neodpovídá počtu osob!
+    </p>
+
+    <p><strong>Celková cena: <span id="total-price">0</span> Kč</strong></p>
+
+    <label for="name">Jméno:</label>
+    <input type="text" id="name" name="name" required><br>
+
+    <label for="email">Email:</label>
+    <input
+  type="email"
+  id="email"
+  name="email"
+  required
+  pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+  title="Zadejte platnou e-mailovou adresu"
+/><br>
+
+    <label for="phone">Telefon:</label>
+    <input
+  type="tel"
+  id="phone"
+  name="phone"
+  required
+  pattern="^\+?\d{9,15}$"
+  title="Zadejte platné telefonní číslo (např. +420123456789)"
+/><br>
+
+    <button type="submit">Odeslat rezervaci</button>
+  </form>
+
+  <script src="booking.js"></script>
+</body>
+</html>

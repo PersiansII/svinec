@@ -1,0 +1,105 @@
+[
+  {
+    "id": 1,
+    "rooms": [
+      1,
+      2
+    ],
+    "name": "Jan Novak",
+    "email": "jan.novak@example.com",
+    "phone": "777888999",
+    "people": 3,
+    "dog": true,
+    "breakfast": false,
+    "startDate": "2025-07-10",
+    "endDate": "2025-07-15"
+  },
+  {
+    "id": 2,
+    "rooms": [
+      5
+    ],
+    "name": "Petra Svobodová",
+    "email": "petra@example.com",
+    "phone": "777123456",
+    "people": 2,
+    "dog": false,
+    "breakfast": true,
+    "startDate": "2025-07-18",
+    "endDate": "2025-07-22"
+  },
+  {
+    "id": 3,
+    "rooms": [
+      3,
+      4,
+      6
+    ],
+    "name": "Karel Dvořák",
+    "email": "karel.dvorak@example.com",
+    "phone": "602445566",
+    "people": 5,
+    "dog": false,
+    "breakfast": true,
+    "startDate": "2025-07-25",
+    "endDate": "2025-07-30"
+  },
+  {
+    "id": 101,
+    "rooms": [
+      2
+    ],
+    "name": "Anna Nováková",
+    "email": "anna.novakova@example.com",
+    "phone": "777111222",
+    "people": 2,
+    "dog": false,
+    "breakfast": true,
+    "startDate": "2025-08-10",
+    "endDate": "2025-08-12"
+  },
+  {
+    "id": 102,
+    "rooms": [
+      5,
+      6
+    ],
+    "name": "Petr Svoboda",
+    "email": "petr.svoboda@example.com",
+    "phone": "777333444",
+    "people": 4,
+    "dog": true,
+    "breakfast": false,
+    "startDate": "2025-08-15",
+    "endDate": "2025-08-20"
+  },
+  {
+    "startDate": "2025-07-19",
+    "endDate": "2025-07-22",
+    "rooms": [
+      1
+    ],
+    "people": 2,
+    "dog": true,
+    "breakfast": true,
+    "name": "Adam Král",
+    "email": "adam.kral@gnj.cz",
+    "phone": "739418927",
+    "id": 1752568348125
+  },
+  {
+    "startDate": "2025-07-17",
+    "endDate": "2025-07-22",
+    "rooms": [
+      7,
+      14
+    ],
+    "people": 7,
+    "dog": true,
+    "breakfast": true,
+    "name": "LAmana",
+    "email": "asdasd@asdasd",
+    "phone": "dalskdasd",
+    "id": 1752568846305
+  }
+]

@@ -1,0 +1,101 @@
+[
+  {
+    "id": 1,
+    "name": "Pokoj 1",
+    "price": 2006,
+    "beds": 3,
+    "image": "/images/pokoj1.jpg",
+    "photo": "304140100c24bc2c71c01f6b8ccf0cb8"
+  },
+  {
+    "id": 2,
+    "name": "Pokoj 2",
+    "price": 900,
+    "beds": 4,
+    "image": "/images/pokoj2.jpg"
+  },
+  {
+    "id": 3,
+    "name": "Pokoj 3",
+    "price": 950,
+    "beds": 2,
+    "image": "/images/pokoj3.jpg"
+  },
+  {
+    "id": 4,
+    "name": "Pokoj 4",
+    "price": 1000,
+    "beds": 3,
+    "image": "/images/pokoj4.jpg"
+  },
+  {
+    "id": 5,
+    "name": "Pokoj 5",
+    "price": 1050,
+    "beds": 4,
+    "image": "/images/pokoj5.jpg"
+  },
+  {
+    "id": 6,
+    "name": "Pokoj 6",
+    "price": 1100,
+    "beds": 2,
+    "image": "/images/pokoj6.jpg"
+  },
+  {
+    "id": 7,
+    "name": "Pokoj 7",
+    "price": 1150,
+    "beds": 3,
+    "image": "/images/pokoj7.jpg"
+  },
+  {
+    "id": 8,
+    "name": "Pokoj 8",
+    "price": 1200,
+    "beds": 4,
+    "image": "/images/pokoj8.jpg"
+  },
+  {
+    "id": 9,
+    "name": "Pokoj 9",
+    "price": 1250,
+    "beds": 2,
+    "image": "/images/pokoj9.jpg"
+  },
+  {
+    "id": 10,
+    "name": "Pokoj 10",
+    "price": 1300,
+    "beds": 3,
+    "image": "/images/pokoj10.jpg"
+  },
+  {
+    "id": 11,
+    "name": "Pokoj 11",
+    "price": 1350,
+    "beds": 4,
+    "image": "/images/pokoj11.jpg"
+  },
+  {
+    "id": 12,
+    "name": "Pokoj 12",
+    "price": 1400,
+    "beds": 2,
+    "image": "/images/pokoj12.jpg"
+  },
+  {
+    "id": 13,
+    "name": "Pokoj 13",
+    "price": 1450,
+    "beds": 3,
+    "image": "/images/pokoj13.jpg"
+  },
+  {
+    "id": 14,
+    "name": "Pokoj 14",
+    "price": 1500,
+    "beds": 4,
+    "image": "/images/pokoj14.jpg"
+  }
+]

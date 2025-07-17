@@ -1,0 +1,7 @@
+[
+  { "id": 1, "name": "Zahrádka", "capacity": 60, "pricePerHour": 10 },
+  { "id": 2, "name": "Jídelna", "capacity": 40, "pricePerHour": 800 },
+  { "id": 3, "name": "Krbovna", "capacity": 20, "pricePerHour": 500 },
+  { "id": 4, "name": "Restaurace", "capacity": 40, "pricePerHour": 900 },
+  { "id": 5, "name": "Ohniště", "capacity": 40, "pricePerHour": 400 }
+]
