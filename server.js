@@ -369,7 +369,6 @@ app.post('/api/admin/logout', (req, res) => {
   res.json({ success: true });
 });
 
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
