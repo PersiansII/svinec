@@ -73,3 +73,69 @@ button:hover {
 p {
   font-size: 1.1rem;
 }
+
+/* Modern calendar styles */
+.calendar-table {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto 10px auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 1.2rem;
+  background: #f8fafc;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.calendar-table th, .calendar-table td {
+  width: 48px;
+  height: 48px;
+  text-align: center;
+  border-radius: 8px;
+  transition: background 0.2s, color 0.2s;
+  cursor: pointer;
+  font-weight: 500;
+}
+.calendar-table th {
+  background: #e3eafc;
+  color: #1976d2;
+  font-size: 1rem;
+  border: none;
+}
+.calendar-table td {
+  background: #fff;
+  border: none;
+  color: #222;
+}
+.calendar-table td:hover:not([style*="opacity"]) {
+  background: #e3eafc;
+}
+.calendar-table td.selected,
+.calendar-table td.range {
+  background: #1976d2 !important;
+  color: #fff !important;
+}
+.calendar-table td.range {
+  background: #90caf9 !important;
+  color: #222 !important;
+}
+.calendar-table td.today {
+  border: 2px solid #1976d2;
+}
+.calendar-table td[style*="opacity"] {
+  background: #f0f0f0;
+  color: #aaa;
+  cursor: not-allowed;
+}
+.calendar-table button {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  color: #1976d2;
+  cursor: pointer;
+  padding: 0 8px;
+  transition: color 0.2s;
+}
+.calendar-table button:hover {
+  color: #0d47a1;
+}

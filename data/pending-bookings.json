@@ -1,16 +1,1 @@
-[
-  {
-    "id": 201,
-    "rooms": [
-      2
-    ],
-    "name": "Jakub Beneš",
-    "email": "jakub.benes@example.com",
-    "phone": "777777777",
-    "people": 1,
-    "dog": false,
-    "breakfast": false,
-    "startDate": "2025-08-11",
-    "endDate": "2025-08-13"
-  }
-]
+[]

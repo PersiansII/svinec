@@ -5,64 +5,138 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rezervace ubytování</title>
   <link rel="stylesheet" href="booking.css" />
+  <style>
+    .step { display: none; }
+    .step.active { display: block; }
+    .room-card {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      margin: 10px 0;
+      padding: 10px;
+      background: #fff;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+    .room-card img {
+      width: 120px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 5px;
+    }
+    .room-card input[type="checkbox"] {
+      margin-right: 10px;
+    }
+    .summary-list { margin: 0 0 10px 0; padding: 0; }
+    .summary-list li { list-style: none; margin-bottom: 5px; }
+    .step-buttons { margin-top: 20px; display: flex; gap: 10px; }
+    #photo-modal {
+      display:none;
+      position:fixed;
+      z-index:1000;
+      left:0;
+      top:0;
+      width:100vw;
+      height:100vh;
+      background:rgba(0,0,0,0.8);
+      align-items:center;
+      justify-content:center;
+    }
+    #photo-modal-close {
+      position:absolute;
+      top:30px;
+      right:40px;
+      font-size:2.5rem;
+      color:#fff;
+      cursor:pointer;
+    }
+    #photo-modal-img {
+      max-width:90vw;
+      max-height:80vh;
+      border-radius:10px;
+      box-shadow:0 4px 32px #000;
+    }
+    #photo-modal-nav {
+      margin-top:20px;
+      text-align:center;
+    }
+    #photo-prev, #photo-next {
+      font-size:2rem;
+      margin:0 30px;
+    }
+  </style>
 </head>
 <body>
   <h1>Rezervace ubytování</h1>
   <form id="booking-form">
-    <label for="startDate">Datum příjezdu:</label>
-    <input type="date" id="startDate" name="startDate" required><br>
 
-    <label for="endDate">Datum odjezdu:</label>
-    <input type="date" id="endDate" name="endDate" required><br>
+    <!-- Step 1: Date, people, rooms -->
+    <div class="step active" id="step-1">
+      <label>Vyberte termín:</label>
+      <div id="calendar-container"></div>
+      <div id="selected-dates" style="margin:10px 0; color:#2196F3;"></div>
+      <label>Počet osob:<br>
+        <input type="number" id="people" min="1" required>
+      </label><br>
+      <label>Počet pokojů:<br>
+        <input type="number" id="roomCount" min="1" required>
+      </label><br>
+      <div class="step-buttons">
+        <button type="button" id="to-step-2">Další</button>
+      </div>
+    </div>
 
-    <label for="rooms">Vyberte pokoje:</label>
-    <div id="rooms-container"></div>
+    <!-- Step 2: Room selection -->
+    <div class="step" id="step-2">
+      <div id="rooms-list"></div>
+      <div id="rooms-error" style="color:red; display:none;">Vyberte požadovaný počet pokojů.</div>
+      <div class="step-buttons">
+        <button type="button" id="back-to-1">Zpět</button>
+        <button type="button" id="to-step-3">Další</button>
+      </div>
+    </div>
 
-    <label for="people">Počet osob:</label>
-    <input type="number" id="people" name="people" min="1" required><br>
+    <!-- Step 3: Services -->
+    <div class="step" id="step-3">
+      <div id="services-list"></div>
+      <div class="step-buttons">
+        <button type="button" id="back-to-2">Zpět</button>
+        <button type="button" id="to-step-4">Další</button>
+      </div>
+    </div>
 
-    <label>
-      <input type="checkbox" id="dog" name="dog" />
-      🐶 Se psem (za příplatek)
-    </label><br>
-
-    <label>
-      <input type="checkbox" id="breakfast" name="breakfast" />
-      🍳 Snídaně (za příplatek)
-    </label><br>
-
-    <p id="beds-warning" style="color: red; display: none;">
-      ⚠️ Počet lůžek neodpovídá počtu osob!
-    </p>
-
-    <p><strong>Celková cena: <span id="total-price">0</span> Kč</strong></p>
-
-    <label for="name">Jméno:</label>
-    <input type="text" id="name" name="name" required><br>
-
-    <label for="email">Email:</label>
-    <input
-  type="email"
-  id="email"
-  name="email"
-  required
-  pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
-  title="Zadejte platnou e-mailovou adresu"
-/><br>
-
-    <label for="phone">Telefon:</label>
-    <input
-  type="tel"
-  id="phone"
-  name="phone"
-  required
-  pattern="^\+?\d{9,15}$"
-  title="Zadejte platné telefonní číslo (např. +420123456789)"
-/><br>
-
-    <button type="submit">Odeslat rezervaci</button>
+    <!-- Step 4: Overview -->
+    <div class="step" id="step-4">
+      <h3>Přehled rezervace</h3>
+      <ul class="summary-list" id="summary-list"></ul>
+      <p><strong>Celková cena: <span id="total-price">0</span> Kč</strong></p>
+      <label>Jméno:<br>
+        <input type="text" id="name" required>
+      </label><br>
+      <label>Email:<br>
+        <input type="email" id="email" required>
+      </label><br>
+      <label>Telefon:<br>
+        <input type="tel" id="phone" required>
+      </label><br>
+      <div class="step-buttons">
+        <button type="button" id="back-to-3">Zpět</button>
+        <button type="submit" id="submit-btn">Rezervovat</button>
+      </div>
+    </div>
   </form>
 
-  <script src="booking.js"></script>
+  <!-- Photo Modal -->
+  <div id="photo-modal">
+    <span id="photo-modal-close">&times;</span>
+    <img id="photo-modal-img" src="">
+    <div id="photo-modal-nav">
+      <button id="photo-prev">&#8592;</button>
+      <button id="photo-next">&#8594;</button>
+    </div>
+  </div>
+
+  <script src="calendar.js"></script>
+  <script src="booking-wizard.js"></script>
 </body>
 </html>

@@ -12,24 +12,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cookieParser());
 app.use(bodyParser.json());
-
-// 🔒 Protect /admin root
-app.get('/admin/', (req, res) => {
-  if (req.cookies.adminToken === config.adminToken) {
-    res.sendFile(path.join(__dirname, 'public/admin/index.html'));
-  } else {
-    res.redirect('/admin/login.html');
-  }
-});
-
-// 🔒 Protect /admin/index.html directly
-app.get('/admin/index.html', (req, res) => {
-  if (req.cookies.adminToken === config.adminToken) {
-    res.sendFile(path.join(__dirname, 'public/admin/index.html'));
-  } else {
-    res.redirect('/admin/login.html');
-  }
-});
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // 📂 Serve static admin files (css, js)
 app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
@@ -50,45 +33,33 @@ app.get('/api/bookings', (req, res) => {
 });
 
 app.post('/api/bookings', (req, res) => {
-    const newBooking = req.body;
-
-    // Load confirmed bookings
-    const confirmed = JSON.parse(fs.readFileSync('./data/confirmed-bookings.json'));
-
-    // Check for conflicts
-    const conflict = confirmed.some(existing => {
-        const existingStart = new Date(existing.startDate);
-        const existingEnd = new Date(existing.endDate);
-        const newStart = new Date(newBooking.startDate);
-        const newEnd = new Date(newBooking.endDate);
-
-        // Check for date overlap
-        const datesOverlap = newStart < existingEnd && newEnd > existingStart;
-
-        // Check if any rooms overlap
-        const roomsOverlap = existing.rooms.some(room => newBooking.rooms.includes(room));
-
-        return datesOverlap && roomsOverlap;
-    });
-
-    if (conflict) {
-        return res.status(409).json({
-            success: false,
-            message: "Vybrané pokoje nejsou v požadovaném termínu dostupné."
-        });
-    }
-
-    // Save as pending if no conflict
-    const pending = JSON.parse(fs.readFileSync('./data/pending-bookings.json'));
-    newBooking.id = Date.now();
-    pending.push(newBooking);
-    fs.writeFileSync('./data/pending-bookings.json', JSON.stringify(pending, null, 2));
-
-    res.json({ success: true, message: 'Rezervace byla odeslána a čeká na potvrzení.' });
+  // ...validation...
+  const pendingBookings = JSON.parse(fs.readFileSync('./data/pending-bookings.json'));
+  const booking = {
+    startDate: req.body.startDate,
+    endDate: req.body.endDate,
+    rooms: req.body.rooms,
+    people: req.body.people,
+    dogs: req.body.dogs,
+    extraBeds: req.body.extraBeds,
+    breakfast: req.body.breakfast,
+    breakfastPeople: req.body.breakfastPeople,
+    name: req.body.name,
+    email: req.body.email,
+    phone: req.body.phone,
+    totalPrice: req.body.totalPrice,
+    occupancy: req.body.occupancy, 
+    createdAt: new Date().toISOString(),
+    id: Date.now()
+  };
+  pendingBookings.push(booking);
+  fs.writeFileSync('./data/pending-bookings.json', JSON.stringify(pendingBookings, null, 2));
+  res.json({ success: true });
 });
 
 
 app.get('/api/bookings/pending', (req, res) => {
+    removeExpiredPendingBookings();
     const filePath = path.join(__dirname, 'data', 'pending-bookings.json');
     if (fs.existsSync(filePath)) {
         const pendingBookings = JSON.parse(fs.readFileSync(filePath));
@@ -111,12 +82,15 @@ app.get('/api/bookings/confirmed', (req, res) => {
 
 // Accept pending booking
 app.post('/api/bookings/:id/accept', (req, res) => {
+    removeExpiredPendingBookings();
     const bookingId = parseInt(req.params.id);
     const pendingFile = path.join(__dirname, 'data', 'pending-bookings.json');
     const confirmedFile = path.join(__dirname, 'data', 'confirmed-bookings.json');
+    const archiveFile = path.join(__dirname, 'data', 'archive-rooms.json');
 
     let pending = JSON.parse(fs.readFileSync(pendingFile));
     let confirmed = JSON.parse(fs.readFileSync(confirmedFile));
+    let archive = fs.existsSync(archiveFile) ? JSON.parse(fs.readFileSync(archiveFile)) : [];
 
     const bookingIndex = pending.findIndex(b => b.id === bookingId);
     if (bookingIndex === -1) {
@@ -138,16 +112,19 @@ app.post('/api/bookings/:id/accept', (req, res) => {
 
     // Move to confirmed
     confirmed.push(booking);
+    archive.push(booking); // Archive the booking
     pending.splice(bookingIndex, 1);
 
     fs.writeFileSync(pendingFile, JSON.stringify(pending, null, 2));
     fs.writeFileSync(confirmedFile, JSON.stringify(confirmed, null, 2));
+    fs.writeFileSync(archiveFile, JSON.stringify(archive, null, 2));
 
     res.json({ success: true, message: 'Rezervace potvrzena.' });
 });
 
 // Reject pending booking
 app.post('/api/bookings/:id/reject', (req, res) => {
+    removeExpiredPendingBookings();
     const bookingId = parseInt(req.params.id);
     const pendingFile = path.join(__dirname, 'data', 'pending-bookings.json');
 
@@ -180,6 +157,7 @@ app.get('/api/common-bookings/confirmed', (req, res) => {
 
 // Get pending common room bookings
 app.get('/api/common-bookings/pending', (req, res) => {
+    removeExpiredPendingBookings();
     const bookings = JSON.parse(fs.readFileSync('./data/pending-common-bookings.json'));
     res.json(bookings);
 });
@@ -188,35 +166,59 @@ app.get('/api/common-bookings/pending', (req, res) => {
 app.post('/api/common-bookings', (req, res) => {
     const newBooking = req.body;
     const confirmed = JSON.parse(fs.readFileSync('./data/confirmed-common-bookings.json'));
+    const commonRooms = JSON.parse(fs.readFileSync('./data/common-rooms.json'));
 
-    // Check for conflicts
-    const conflict = confirmed.some(existing => {
-        const overlap = new Date(newBooking.start) < new Date(existing.end) &&
-                        new Date(newBooking.end) > new Date(existing.start);
-        const roomsOverlap = existing.rooms.some(r => newBooking.rooms.includes(r));
-        return overlap && roomsOverlap;
-    });
-
-    if (conflict) {
-        return res.status(409).json({
-            success: false,
-            message: "Vybrané místnosti nejsou v požadovaném čase dostupné."
-        });
+    // ✅ Validate that rooms is present and an array
+    if (!Array.isArray(newBooking.rooms) || newBooking.rooms.length === 0) {
+        res.status(400).json({ message: 'Nebyl vybrán žádný společný prostor.' });
+        return;
     }
 
-    const pending = JSON.parse(fs.readFileSync('./data/pending-common-bookings.json'));
-    newBooking.id = Date.now();
-    pending.push(newBooking);
-    fs.writeFileSync('./data/pending-common-bookings.json', JSON.stringify(pending, null, 2));
+    let exceedsCapacity = false;
 
-    res.json({ success: true, message: 'Rezervace byla odeslána a čeká na potvrzení.' });
+    // ✅ Check if total people for each room exceeds capacity in the requested timeslot
+    newBooking.rooms.forEach(roomId => {
+        const room = commonRooms.find(r => r.id === roomId);
+        if (!room) return; // Skip if room ID not found
+
+        const totalPeople = confirmed
+            .filter(existing => {
+                const overlap = new Date(newBooking.start) < new Date(existing.end) &&
+                                new Date(newBooking.end) > new Date(existing.start);
+                return overlap && existing.rooms.includes(roomId);
+            })
+            .reduce((sum, b) => sum + (b.people || 0), 0);
+
+        if (totalPeople + (newBooking.people || 0) > room.capacity) {
+            exceedsCapacity = true;
+        }
+    });
+
+    if (exceedsCapacity) {
+        res.status(409).json({ message: 'Tento společný prostor je v tomto termínu již plně obsazený. Vyberte prosím jiný termín.' });
+        return;
+    }
+
+    // ✅ Assign unique ID for admin confirmation
+newBooking.id = Date.now();
+newBooking.createdAt = new Date().toISOString(); // <-- Add this line
+
+// Add to pending bookings
+const pending = JSON.parse(fs.readFileSync('./data/pending-common-bookings.json'));
+pending.push(newBooking);
+    fs.writeFileSync('./data/pending-common-bookings.json', JSON.stringify(pending, null, 2));
+    res.status(201).json({ message: 'Rezervace byla odeslána ke schválení.' });
 });
+
 
 // Accept pending common booking
 app.post('/api/common-bookings/:id/accept', (req, res) => {
+    removeExpiredPendingBookings();
     const bookingId = parseInt(req.params.id);
     let pending = JSON.parse(fs.readFileSync('./data/pending-common-bookings.json'));
     let confirmed = JSON.parse(fs.readFileSync('./data/confirmed-common-bookings.json'));
+    const archiveFile = path.join(__dirname, 'data', 'archive-common.json');
+    let archive = fs.existsSync(archiveFile) ? JSON.parse(fs.readFileSync(archiveFile)) : [];
 
     const index = pending.findIndex(b => b.id === bookingId);
     if (index === -1) {
@@ -226,15 +228,18 @@ app.post('/api/common-bookings/:id/accept', (req, res) => {
     const booking = pending[index];
     pending.splice(index, 1);
     confirmed.push(booking);
+    archive.push(booking); // Archive the booking
 
     fs.writeFileSync('./data/pending-common-bookings.json', JSON.stringify(pending, null, 2));
     fs.writeFileSync('./data/confirmed-common-bookings.json', JSON.stringify(confirmed, null, 2));
+    fs.writeFileSync(archiveFile, JSON.stringify(archive, null, 2));
 
     res.json({ success: true, message: "Rezervace byla potvrzena." });
 });
 
 // Reject pending common booking
 app.post('/api/common-bookings/:id/reject', (req, res) => {
+    removeExpiredPendingBookings();
     const bookingId = parseInt(req.params.id);
     let pending = JSON.parse(fs.readFileSync('./data/pending-common-bookings.json'));
 
@@ -331,44 +336,158 @@ for (
 });
 
 // Update room details
-app.post('/api/rooms/update', upload.single('photo'), (req, res) => {
-    const { id, price, beds } = req.body;
+app.post('/api/rooms/update', upload.array('photos', 10), (req, res) => {
+    const { id, price, beds, dogAllowed, dogFee, extraBedAllowed, extraBedFee } = req.body;
     const rooms = JSON.parse(fs.readFileSync('./data/rooms.json'));
-
     const roomIndex = rooms.findIndex(r => r.id == id);
     if (roomIndex === -1) {
         return res.status(404).json({ success: false, message: "Pokoj nenalezen." });
     }
-
     rooms[roomIndex].price = parseInt(price);
     rooms[roomIndex].beds = parseInt(beds);
 
-    if (req.file) {
-        rooms[roomIndex].photo = req.file.filename;
+    // Save dog/extra bed values
+    rooms[roomIndex].dogAllowed = dogAllowed === 'true' || dogAllowed === true;
+    rooms[roomIndex].dogFee = parseInt(dogFee) || 0;
+    rooms[roomIndex].extraBedAllowed = extraBedAllowed === 'true' || extraBedAllowed === true;
+    rooms[roomIndex].extraBedFee = parseInt(extraBedFee) || 0;
+
+    // Handle multiple photos
+    if (req.files && req.files.length > 0) {
+        rooms[roomIndex].photos = rooms[roomIndex].photos || [];
+        req.files.forEach(file => {
+            if (!rooms[roomIndex].photos.includes(file.filename)) {
+                rooms[roomIndex].photos.push(file.filename);
+            }
+        });
     }
 
     fs.writeFileSync('./data/rooms.json', JSON.stringify(rooms, null, 2));
     res.json({ success: true });
 });
 
-// Admin login
-app.post('/api/admin/login', (req, res) => {
-  const { password } = req.body;
-  if (password === config.adminPassword) {
-    res.cookie('adminToken', config.adminToken, {
-      httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000 // 1 day
-    });
+// Get all bookings (confirmed + pending)
+app.get('/api/bookings/all', (req, res) => {
+    removeExpiredPendingBookings();
+    // Room bookings
+    const confirmed = JSON.parse(fs.readFileSync('./data/confirmed-bookings.json'));
+    const pending = JSON.parse(fs.readFileSync('./data/pending-bookings.json'));
+
+    // Common room bookings
+    const confirmedCommon = JSON.parse(fs.readFileSync('./data/confirmed-common-bookings.json'));
+    const pendingCommon = JSON.parse(fs.readFileSync('./data/pending-common-bookings.json'));
+
+    // Add status and type to each booking
+    const confirmedWithStatus = confirmed.map(b => ({ ...b, status: 'confirmed', type: 'room' }));
+    const pendingWithStatus = pending.map(b => ({ ...b, status: 'pending', type: 'room' }));
+
+    const confirmedCommonWithStatus = confirmedCommon.map(b => ({ ...b, status: 'confirmed', type: 'common' }));
+    const pendingCommonWithStatus = pendingCommon.map(b => ({ ...b, status: 'pending', type: 'common' }));
+
+    // Combine all
+    res.json([
+        ...confirmedWithStatus,
+        ...pendingWithStatus,
+        ...confirmedCommonWithStatus,
+        ...pendingCommonWithStatus
+    ]);
+});
+
+// Get all seasons
+app.get('/api/seasons', (req, res) => {
+    const file = './data/seasons.json';
+    if (fs.existsSync(file)) {
+        res.json(JSON.parse(fs.readFileSync(file)));
+    } else {
+        res.json([]);
+    }
+});
+
+// Add a new season
+app.post('/api/seasons', (req, res) => {
+    const file = './data/seasons.json';
+    let seasons = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : [];
+    const newSeason = { ...req.body, id: Date.now() };
+    seasons.push(newSeason);
+    fs.writeFileSync(file, JSON.stringify(seasons, null, 2));
+    res.json({ success: true, season: newSeason });
+});
+
+// Delete a season
+app.delete('/api/seasons/:id', (req, res) => {
+    const file = './data/seasons.json';
+    let seasons = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : [];
+    seasons = seasons.filter(s => s.id != req.params.id);
+    fs.writeFileSync(file, JSON.stringify(seasons, null, 2));
     res.json({ success: true });
-  } else {
-    res.status(401).json({ success: false, message: 'Nesprávné heslo' });
-  }
 });
-app.post('/api/admin/logout', (req, res) => {
-  res.clearCookie('adminToken');
-  res.json({ success: true });
-});
+
+// Function to remove expired pending bookings
+function removeExpiredPendingBookings() {
+    const timeout = (config.pendingTimeoutMinutes || 30) * 60 * 1000;
+    const now = Date.now();
+
+    // Room bookings
+    const pendingPath = './data/pending-bookings.json';
+    let pending = JSON.parse(fs.readFileSync(pendingPath));
+    const filtered = pending.filter(b => !b.createdAt || (now - new Date(b.createdAt).getTime()) < timeout);
+    if (filtered.length !== pending.length) {
+        fs.writeFileSync(pendingPath, JSON.stringify(filtered, null, 2));
+    }
+
+    // Common room bookings
+    const pendingCommonPath = './data/pending-common-bookings.json';
+    let pendingCommon = JSON.parse(fs.readFileSync(pendingCommonPath));
+    const filteredCommon = pendingCommon.filter(b => !b.createdAt || (now - new Date(b.createdAt).getTime()) < timeout);
+    if (filteredCommon.length !== pendingCommon.length) {
+        fs.writeFileSync(pendingCommonPath, JSON.stringify(filteredCommon, null, 2));
+    }
+}
+
+// Function to remove old confirmed bookings
+function removeOldConfirmedBookings() {
+    const now = Date.now();
+    const cutoff = now - 48 * 60 * 60 * 1000; // 48 hours in ms
+
+    // Rooms
+    const confirmedPath = './data/confirmed-bookings.json';
+    let confirmed = JSON.parse(fs.readFileSync(confirmedPath));
+    const filtered = confirmed.filter(b => {
+        // Use endDate for rooms
+        if (!b.endDate) return true;
+        return new Date(b.endDate).getTime() > cutoff;
+    });
+    if (filtered.length !== confirmed.length) {
+        fs.writeFileSync(confirmedPath, JSON.stringify(filtered, null, 2));
+    }
+
+    // Common rooms
+    const confirmedCommonPath = './data/confirmed-common-bookings.json';
+    let confirmedCommon = JSON.parse(fs.readFileSync(confirmedCommonPath));
+    const filteredCommon = confirmedCommon.filter(b => {
+        // Use end for common rooms
+        if (!b.end) return true;
+        return new Date(b.end).getTime() > cutoff;
+    });
+    if (filteredCommon.length !== confirmedCommon.length) {
+        fs.writeFileSync(confirmedCommonPath, JSON.stringify(filteredCommon, null, 2));
+    }
+}
+
+// Check and remove expired bookings every minute
+setInterval(() => {
+    removeExpiredPendingBookings();
+    removeOldConfirmedBookings();
+}, 60 * 1000); // every 1 minute
+
+removeOldConfirmedBookings();
+setInterval(removeOldConfirmedBookings, 24 * 60 * 60 * 1000);
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+});
+
+// Config route
+app.get('/api/config', (req, res) => {
+    res.json({ pendingTimeoutMinutes: config.pendingTimeoutMinutes });
 });

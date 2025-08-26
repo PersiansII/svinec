@@ -112,6 +112,7 @@
     <button class="tab-btn active" onclick="showTab('rooms')">🏨 Pokoje</button>
     <button class="tab-btn" onclick="showTab('common')">🕑 Společné prostory</button>
     <button class="tab-btn" onclick="showTab('manage-rooms')">🛠️ Správa pokojů</button>
+    <button class="tab-btn" onclick="showTab('seasons')">📅 Sezóny</button>
   </div>
 
   <!-- Blokovat celou chatu button -->
@@ -137,11 +138,49 @@
   <!-- Manage Rooms Section -->
   <div id="manage-rooms-tab" class="container" style="display:none;"></div>
 
+  <!-- Seasons Section -->
+  <div id="seasons-tab" class="container" style="display:none; flex-direction:column; align-items:center;">
+    <button class="btn block-all-btn" onclick="showSeasonForm()">Přidat novou sezónu</button>
+    <div id="season-list"></div>
+  </div>
+
+  <h2 id="current-clients" style="text-align:center; color:#2196F3; margin-top:0;"></h2>
+
+  <!-- Modal for adding season -->
+  <div id="season-form-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); align-items:center; justify-content:center;">
+    <form id="season-form" style="background:#fff; padding:20px; border-radius:8px; min-width:300px;">
+      <h3>Přidat sezónu</h3>
+      <label>Název: <input type="text" id="season-name" required></label>
+      <label>Od: <input type="date" id="season-start" required></label>
+      <label>Do: <input type="date" id="season-end" required></label>
+      <label>Typ úpravy:
+        <select id="season-type">
+          <option value="percent">Procentuální změna (%)</option>
+          <option value="flat">Pevná částka (Kč)</option>
+        </select>
+      </label>
+      <label>Hodnota: <input type="number" id="season-value" required></label>
+      <button type="submit" class="btn accept-btn">Přidat</button>
+      <button type="button" class="btn reject-btn" onclick="hideSeasonForm()">Zrušit</button>
+    </form>
+  </div>
+
   <script>
+    let PENDING_TIMEOUT_MINUTES = 300; // fallback
+
+    async function fetchConfig() {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const data = await res.json();
+        PENDING_TIMEOUT_MINUTES = data.pendingTimeoutMinutes || 1;
+      }
+    }
+
     function showTab(tab) {
       document.getElementById('rooms-tab').style.display = (tab === 'rooms') ? 'grid' : 'none';
       document.getElementById('common-tab').style.display = (tab === 'common') ? 'grid' : 'none';
       document.getElementById('manage-rooms-tab').style.display = (tab === 'manage-rooms') ? 'grid' : 'none';
+      document.getElementById('seasons-tab').style.display = (tab === 'seasons') ? 'flex' : 'none';
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
       document.querySelector(`.tab-btn[onclick="showTab('${tab}')"]`).classList.add('active');
     }
@@ -163,7 +202,18 @@
 
       const roomInfo = isCommon
         ? booking.rooms.map(id => getCommonRoomName(id)).join(", ")
-        : booking.rooms.map(id => "Pokoj " + id).join(", ");
+        : booking.rooms.map(id => getRoomName(id)).join(", ");
+
+      // Occupancy HTML (only for regular room bookings)
+      let occupancyHtml = '';
+      if (!isCommon && booking.occupancy && typeof booking.occupancy === 'object' && Object.keys(booking.occupancy).length) {
+        const occItems = Object.keys(booking.occupancy).map(rid => {
+          const name = getRoomName(rid);
+          const cnt = booking.occupancy[rid];
+          return `<li>${name}: ${cnt} osob</li>`;
+        }).join('');
+        occupancyHtml = `<p><strong>Obsazení po pokojích:</strong><ul>${occItems}</ul></p>`;
+      }
 
       card.innerHTML = `
         <h2>${booking.name}</h2>
@@ -171,8 +221,21 @@
         <p><strong>Do:</strong> ${formatDateTime(booking.end || booking.endDate)}</p>
         <p><strong>${isCommon ? "Místnost" : "Pokoje"}:</strong> ${roomInfo}</p>
         <p><strong>Osoby:</strong> ${booking.people}</p>
-        ${!isCommon ? `<p><strong>Pes:</strong> ${booking.dog ? "Ano" : "Ne"}</p>` : ""}
-        ${!isCommon ? `<p><strong>Snídaně:</strong> ${booking.breakfast ? "Ano" : "Ne"}</p>` : ""}
+        ${occupancyHtml}
+        ${!isCommon ? (() => {
+          let services = [];
+          if (Array.isArray(booking.dogs) && booking.dogs.length) {
+            services.push('Pes: ' + booking.dogs.map(id => getRoomName(id)).join(', '));
+          }
+          if (Array.isArray(booking.extraBeds) && booking.extraBeds.length) {
+            services.push('Přistýlka: ' + booking.extraBeds.map(id => getRoomName(id)).join(', '));
+          }
+          if (booking.breakfast && booking.breakfastPeople) {
+            services.push(`Snídaně pro ${booking.breakfastPeople} osob`);
+          }
+          return services.length ? `<p><strong>Služby:</strong> ${services.join('; ')}</p>` : '';
+        })() : ""}
+        <p><strong>Cena celkem:</strong> ${booking.totalPrice ? booking.totalPrice + ' Kč' : 'N/A'}</p>
         <p><strong>Email:</strong> ${booking.email}</p>
         <p><strong>Telefon:</strong> ${booking.phone}</p>
       `;
@@ -202,6 +265,36 @@
       }
 
       card.appendChild(actions);
+
+      if (type === 'pending' && booking.createdAt) {
+        const timer = document.createElement('div');
+        timer.style.color = '#b71c1c';
+        timer.style.fontWeight = 'bold';
+        timer.style.marginBottom = '5px';
+        card.prepend(timer);
+
+        const timeoutMs = PENDING_TIMEOUT_MINUTES * 60 * 1000;
+        const createdAt = new Date(booking.createdAt);
+        const expiresAt = new Date(createdAt.getTime() + timeoutMs);
+
+        function updateTimer() {
+          const now = new Date();
+          const diff = expiresAt - now;
+          if (diff > 0) {
+            const min = Math.floor(diff / 60000);
+            const sec = Math.floor((diff % 60000) / 1000);
+            timer.textContent = `Vyprší za: ${min}:${sec.toString().padStart(2, '0')}`;
+          } else {
+            timer.textContent = 'Rezervace vypršela';
+          }
+        }
+        updateTimer();
+        const interval = setInterval(() => {
+          updateTimer();
+          if (new Date() >= expiresAt) clearInterval(interval);
+        }, 1000);
+      }
+
       return card;
     }
 
@@ -287,6 +380,7 @@
       await renderBookings('rooms-tab', '/api/bookings/pending', '/api/bookings/confirmed');
       await renderBookings('common-tab', '/api/common-bookings/pending', '/api/common-bookings/confirmed', true);
       await renderRoomManagement();
+      await updateCurrentClients(); // Add this line
     }
 
     async function renderRoomManagement() {
@@ -303,8 +397,25 @@
           <img src="/images/rooms/${room.photo}" alt="${room.name}" class="room-photo">
           <label>Cena za noc (CZK): <input type="number" value="${room.price}" id="price-${room.id}"></label>
           <label>Počet lůžek: <input type="number" value="${room.beds}" id="beds-${room.id}"></label>
-          <label>Změnit foto: <input type="file" id="photo-${room.id}" accept="image/*"></label>
+          <label>Změnit foto: <input type="file" id="photo-${room.id}" accept="image/*" multiple></label>
+          ${room.photos && room.photos.length ? room.photos.map(photo =>
+            `<img src="/images/rooms/${photo}" alt="${room.name}" style="width:60px;height:40px;margin:2px;border-radius:3px;">`
+          ).join('') : ''}
           <button class="btn accept-btn" onclick="saveRoom(${room.id})">💾 Uložit změny</button>
+          <div>
+            <label>
+              <input type="checkbox" id="dog-allowed-${room.id}" ${room.dogAllowed ? 'checked' : ''}>
+              Pes povolen
+            </label>
+            <input type="number" id="dog-fee-${room.id}" value="${room.dogFee || 0}" min="0" style="width:80px;" placeholder="Cena za psa"> Kč
+          </div>
+          <div>
+            <label>
+              <input type="checkbox" id="extra-bed-allowed-${room.id}" ${room.extraBedAllowed ? 'checked' : ''}>
+              Přistýlka povolena
+            </label>
+            <input type="number" id="extra-bed-fee-${room.id}" value="${room.extraBedFee || 0}" min="0" style="width:80px;" placeholder="Cena za přistýlku"> Kč
+          </div>
         `;
 
         container.appendChild(card);
@@ -315,14 +426,22 @@
       const price = document.getElementById(`price-${roomId}`).value;
       const beds = document.getElementById(`beds-${roomId}`).value;
       const photoInput = document.getElementById(`photo-${roomId}`);
-      const photoFile = photoInput.files[0];
+      const photoFiles = photoInput.files;
+      const dogAllowed = document.getElementById(`dog-allowed-${roomId}`).checked;
+      const dogFee = parseInt(document.getElementById(`dog-fee-${roomId}`).value, 10) || 0;
+      const extraBedAllowed = document.getElementById(`extra-bed-allowed-${roomId}`).checked;
+      const extraBedFee = parseInt(document.getElementById(`extra-bed-fee-${roomId}`).value, 10) || 0;
 
       const formData = new FormData();
       formData.append('id', roomId);
       formData.append('price', price);
       formData.append('beds', beds);
-      if (photoFile) {
-        formData.append('photo', photoFile);
+      formData.append('dogAllowed', dogAllowed);
+      formData.append('dogFee', dogFee);
+      formData.append('extraBedAllowed', extraBedAllowed);
+      formData.append('extraBedFee', extraBedFee);
+      for (let i = 0; i < photoFiles.length; i++) {
+        formData.append('photos', photoFiles[i]);
       }
 
       const res = await fetch('/api/rooms/update', {
@@ -339,17 +458,133 @@
     }
 
     let commonRoomsList = [];
+    let roomsList = []; // <-- store regular rooms for name lookup
     async function loadCommonRooms() {
       const res = await fetch('/api/common-rooms');
       commonRoomsList = await res.json();
+    }
+    async function loadRoomsAdmin() {
+      const res = await fetch('/api/rooms');
+      roomsList = await res.json();
+    }
+    function getRoomName(id) {
+      const r = roomsList.find(room => room.id === Number(id));
+      return r ? r.name : `Pokoj ${id}`;
     }
     function getCommonRoomName(id) {
       const room = commonRoomsList.find(r => r.id === id);
       return room ? room.name : "Neznámá místnost";
     }
 
+    async function updateCurrentClients() {
+      const res = await fetch('/api/bookings/confirmed');
+      const bookings = await res.json();
+      const today = new Date();
+      let count = 0;
+      bookings.forEach(b => {
+        if (
+          b.startDate &&
+          b.endDate &&
+          new Date(b.startDate) <= today &&
+          new Date(b.endDate) > today
+        ) {
+          count += b.people || 0;
+        }
+      });
+      document.getElementById('current-clients').textContent =
+        `Aktuálně ubytovaných klientů: ${count}`;
+    }
+
     // Initialize
-    loadCommonRooms().then(() => renderAllBookings());
+    fetchConfig().then(() => {
+      // load both common rooms and regular rooms first so createCard can show room names for occupancy
+      Promise.all([loadCommonRooms(), loadRoomsAdmin()]).then(() => renderAllBookings());
+    });
+
+    // Season management
+    document.getElementById('season-form').onsubmit = async function(e) {
+      e.preventDefault();
+      const name = document.getElementById('season-name').value;
+      const start = document.getElementById('season-start').value;
+      const end = document.getElementById('season-end').value;
+      const type = document.getElementById('season-type').value;
+      const value = document.getElementById('season-value').value;
+
+      const payload = { name, start, end, type, value };
+
+      const res = await fetch('/api/seasons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        alert('Sezóna byla přidána.');
+        hideSeasonForm();
+        renderSeasonList();
+      } else {
+        const error = await res.json();
+        alert(error.message || 'Chyba při přidávání sezóny.');
+      }
+    };
+
+    function showSeasonForm() {
+      document.getElementById('season-form-modal').style.display = 'flex';
+    }
+    function hideSeasonForm() {
+      document.getElementById('season-form-modal').style.display = 'none';
+      document.getElementById('season-form').reset();
+    }
+
+    async function renderSeasons() {
+      const res = await fetch('/api/seasons');
+      const seasons = await res.json();
+      const list = document.getElementById('season-list');
+      list.innerHTML = '';
+      if (seasons.length === 0) {
+        list.innerHTML = '<p>Žádné sezóny.</p>';
+        return;
+      }
+      seasons.forEach(season => {
+        const div = document.createElement('div');
+        div.style = "border:1px solid #ccc; border-radius:6px; padding:8px; margin:8px 0; background:#fafafa;";
+        div.innerHTML = `
+          <strong>${season.name}</strong> (${season.start} – ${season.end})<br>
+          ${season.type === 'percent' ? (season.value > 0 ? '+' : '') + season.value + '%' : (season.value > 0 ? '+' : '') + season.value + ' Kč'}
+          <button class="btn reject-btn" style="margin-left:10px;" onclick="deleteSeason(${season.id})">Smazat</button>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    document.getElementById('season-form').onsubmit = async function(e) {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById('season-name').value,
+        start: document.getElementById('season-start').value,
+        end: document.getElementById('season-end').value,
+        type: document.getElementById('season-type').value,
+        value: parseFloat(document.getElementById('season-value').value)
+      };
+      const res = await fetch('/api/seasons', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        hideSeasonForm();
+        renderSeasons();
+      }
+    };
+
+    async function deleteSeason(id) {
+      if (!confirm('Opravdu smazat tuto sezónu?')) return;
+      await fetch('/api/seasons/' + id, { method: 'DELETE' });
+      renderSeasons();
+    }
+
+    // Call renderSeasons when tab is shown
+    document.querySelector('.tab-btn[onclick="showTab(\'seasons\')"]').addEventListener('click', renderSeasons);
   </script>
 </body>
 </html>

@@ -1,42 +1,118 @@
+/* Existing styles for availability */
+.booked {
+  background-color: red;
+  color: white;
+}
 
-body {
-  font-family: Arial, sans-serif;
-  margin: 0;
-  padding: 0;
+.available {
+  background-color: #45ff70;
+  color: white;
 }
-h1 {
+
+.partial {
+  background-color: rgb(253, 209, 66);
+  color: black;
+}
+
+.pending {
+  background-color: #ffe066;
+  color: #333;
+}
+
+/* ✅ Highlight weekends slightly darker */
+.weekend {
+  filter: brightness(0.9);
+}
+
+/* ✅ Highlight today's column with a blue border */
+th[data-today="true"],
+td.today-column {
+  border-left: 3px solid #2196F3;
+  border-right: 3px solid #2196F3;
+}
+
+th[data-today="true"] {
+  border-top: 3px solid #2196F3;
+}
+
+td.today-column:last-child {
+  border-bottom: 3px solid #2196F3;
+}
+
+/* Highlight today's column with a blue border or background */
+td.today-column {
+  border: 2px solid #1976d2 !important;
+  background: #e3f2fd !important;
+}
+
+/* Center the calendar container */
+#calendar-container {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto;
+  max-width: 800px;
+}
+
+#calendar {
+  width: 100%;
+  table-layout: fixed; /* Equal cell widths */
+  border-collapse: collapse;
+}
+
+#calendar th,
+#calendar td {
+  width: 30px;
+  height: 30px;
   text-align: center;
-  margin-top: 10px;
 }
+
+/* Center month header and arrows */
 .calendar-header {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 10px;
+  margin-bottom: 10px;
 }
+
+#current-month {
+  margin: 0 20px;
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+#calendar th:first-child,
+#calendar td:first-child {
+  width: 100px; /* wider first column for room names */
+  text-align: left;
+  padding-left: 8px;
+}
+
+#calendar th,
+#calendar td {
+  border: 1px solid #666666; /* light gray border for all cells */
+}
+
 #calendar {
-  width: 100%;
-  border-collapse: collapse;
-  overflow-x: auto;
+  border-collapse: collapse; /* ensures borders don’t double up */
 }
-#calendar th, #calendar td {
-  border: 1px solid #ddd;
-  padding: 4px;
-  text-align: center;
-  font-size: 12px;
+
+.fully-booked {
+  background: #f44336 !important;
+  color: #fff !important;
 }
-#calendar th {
-  background-color: #f4f4f4;
+
+.partially-booked {
+  background: #ffe082 !important;
+  color: #222 !important;
 }
-#calendar td.booked {
-  background-color: #f8d7da;
+
+/* Highlight today's date in the header */
+th[data-today="true"] {
+  background-color: #d1e7dd; /* Light green background for today's date */
+  color: #0f5132; /* Dark green text for contrast */
 }
-#calendar td.available {
-  background-color: #d4edda;
-}
-@media (max-width: 768px) {
-  #calendar th, #calendar td {
-    font-size: 10px;
-    padding: 2px;
-  }
+
+th[data-today="true"] {
+  border-bottom: 2px solid #1976d2 !important;
+  background: #e3f2fd !important;
 }

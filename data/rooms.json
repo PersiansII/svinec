@@ -2,100 +2,241 @@
   {
     "id": 1,
     "name": "Pokoj 1",
-    "price": 2006,
+    "price": 100,
     "beds": 3,
+    "dogAllowed": true,
+    "dogFee": 100,
+    "extraBedAllowed": true,
+    "extraBedFee": 100,
     "image": "/images/pokoj1.jpg",
-    "photo": "304140100c24bc2c71c01f6b8ccf0cb8"
+    "photo": "304140100c24bc2c71c01f6b8ccf0cb8",
+    "photos": [
+      "bbf84ff3ad120d0df86643a2debc1c4e",
+      "23834f231a08fa186864f6af480ab93a",
+      "4daa3bccd0fbb6c03666a111dc661f5f"
+    ]
   },
   {
     "id": 2,
     "name": "Pokoj 2",
     "price": 900,
     "beds": 4,
-    "image": "/images/pokoj2.jpg"
+    "dogAllowed": true,
+    "dogFee": 100,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj2.jpg",
+    "photo": "d560293682371b4f0944686247f0a285",
+    "photos": [
+      "680ac67bdd0fdf67fbaedb68aae57487",
+      "b72116d7c8529f2e69ffe5cac710cadf",
+      "490422b5025eb24341c2fe6c908e0124"
+    ]
   },
   {
     "id": 3,
     "name": "Pokoj 3",
     "price": 950,
     "beds": 2,
-    "image": "/images/pokoj3.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": true,
+    "extraBedFee": 100,
+    "image": "/images/pokoj3.jpg",
+    "photo": "c0e57b2da0f6b09c41e4dd9882dd146b",
+    "photos": [
+      "46ae4675d51c32713e0c5a1db8292e5c",
+      "1ec624a944a9582c25f8317deff2251d",
+      "04756d7c9822a3d8394b264f0d546161"
+    ]
   },
   {
     "id": 4,
     "name": "Pokoj 4",
     "price": 1000,
     "beds": 3,
-    "image": "/images/pokoj4.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj4.jpg",
+    "photo": "c5b0c26edc044755e1691793200b535b",
+    "photos": [
+      "ea7129b4b3af6134f46bc304558b8c38",
+      "9e15a35acc043abc132d4850244699d6"
+    ]
   },
   {
     "id": 5,
     "name": "Pokoj 5",
     "price": 1050,
     "beds": 4,
-    "image": "/images/pokoj5.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj5.jpg",
+    "photo": "645f85a01560d75ec2542a7d084f541c",
+    "photos": [
+      "c47e77165abf0425a5cab73024f72528",
+      "92d5644d4c9ebb85ec8d872fe5e0b61e",
+      "a4485b55b7ae73dd65db584a9e190c3a",
+      "e0b8d70158fb082f1a9d5d773379d379",
+      "4d262035aa1b49e9bf2b0d637eb0287b"
+    ]
   },
   {
     "id": 6,
     "name": "Pokoj 6",
     "price": 1100,
     "beds": 2,
-    "image": "/images/pokoj6.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj6.jpg",
+    "photo": "506a91412b4f7de1e853a72cfc13b9ae",
+    "photos": [
+      "c60c28c68b1497e9119a594a4798c627",
+      "50f56c134c439ab8561fcce2b961c08a",
+      "2ee878c46ebb089280e26c906b68b765"
+    ]
   },
   {
     "id": 7,
     "name": "Pokoj 7",
     "price": 1150,
     "beds": 3,
-    "image": "/images/pokoj7.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj7.jpg",
+    "photo": "7875aeaf388ec698bc3b4cbb12682a84",
+    "photos": [
+      "161b9261a65c8c3e18811ba1849017dc",
+      "14e2e240bbd4910f42562077e7b6f9eb",
+      "3380038b1d0a2708272d0080cd65140f",
+      "a42f8914e916f90f3518d75e281d8edb"
+    ]
   },
   {
     "id": 8,
     "name": "Pokoj 8",
     "price": 1200,
     "beds": 4,
-    "image": "/images/pokoj8.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj8.jpg",
+    "photo": "3ece99f6925ede4a56f849d2aca9832a",
+    "photos": [
+      "c7b39db22efed6661da8e5f1da8add7c",
+      "23ba988257b660b5a9ce4c012db4506e"
+    ]
   },
   {
     "id": 9,
     "name": "Pokoj 9",
     "price": 1250,
     "beds": 2,
-    "image": "/images/pokoj9.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj9.jpg",
+    "photo": "f660272211234a5b8b15a768ab5eee98",
+    "photos": [
+      "15676ab9e3c60d5e32b195258cfc2ac1",
+      "ec2c37f0c41d13145f208a1a6f08d247",
+      "a3a169a98cee11e51c2e7e3574a4a9e3",
+      "a10c04ab66e1e61e4890d88972188c63"
+    ]
   },
   {
     "id": 10,
     "name": "Pokoj 10",
     "price": 1300,
     "beds": 3,
-    "image": "/images/pokoj10.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj10.jpg",
+    "photo": "f712ca6063e3635864bc4339fb2ce6eb",
+    "photos": [
+      "d01d3e248843252cbec0d92d38038f3f",
+      "0897fdd000ea98efe551fbec5ee123b9"
+    ]
   },
   {
     "id": 11,
     "name": "Pokoj 11",
     "price": 1350,
     "beds": 4,
-    "image": "/images/pokoj11.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj11.jpg",
+    "photo": "a6737c341f0fa6cbb6a416126826c016",
+    "photos": [
+      "df0a78b2bc1ef3d4dea27661fcdca816",
+      "2caf0ed5b1281b169ce603da88a91f40"
+    ]
   },
   {
     "id": 12,
     "name": "Pokoj 12",
     "price": 1400,
     "beds": 2,
-    "image": "/images/pokoj12.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj12.jpg",
+    "photo": "b9b765e18c64d3c7e3217c5f0c1c543f",
+    "photos": [
+      "18bc9663cd168bf548005fc2833455f0",
+      "b31135ac4ec441516a0f05d8127724cb",
+      "07055efe99dc1e9e49ce3a95534b9bdb"
+    ]
   },
   {
     "id": 13,
     "name": "Pokoj 13",
     "price": 1450,
     "beds": 3,
-    "image": "/images/pokoj13.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj13.jpg",
+    "photo": "bca2e6140fa223e947f9ff8a41d6cd1d",
+    "photos": [
+      "78f057d4cd690e055fb7ed553bfc0d31",
+      "e863a8792c23c491964e373f866c9c93",
+      "f21f0a1ec02d21ae626b99637eb7d62a"
+    ]
   },
   {
     "id": 14,
     "name": "Pokoj 14",
-    "price": 1500,
+    "price": 100,
     "beds": 4,
-    "image": "/images/pokoj14.jpg"
+    "dogAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": false,
+    "extraBedFee": 0,
+    "image": "/images/pokoj14.jpg",
+    "photo": "8b589f21591187e6daf5d57125309376",
+    "photos": [
+      "28d71a55d13c0e81dad043380a16b799",
+      "92afb6b67f9282a9dc294251621d1aca",
+      "a6f8d59ac0606a286c2d86a02d91b0a5",
+      "2dd956134c77076631215bec87e02be6",
+      "63fb11e0225ee6ae6494d6761c930dbd"
+    ]
   }
 ]

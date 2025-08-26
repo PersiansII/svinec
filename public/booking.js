@@ -1,16 +1,22 @@
 let roomsData = [];
-let confirmedBookings = [];
+let allBookings = [];
+let seasons = [];
 
 async function loadRooms() {
   // Fetch all rooms
   const res = await fetch('/api/rooms');
   roomsData = await res.json();
 
-  // Fetch all confirmed bookings
-  const bookingsRes = await fetch('/api/bookings/confirmed');
-  confirmedBookings = await bookingsRes.json();
+  // Fetch all bookings (confirmed + pending)
+  const bookingsRes = await fetch('/api/bookings/all');
+  allBookings = await bookingsRes.json();
 
   renderRoomOptions();
+}
+
+async function loadSeasons() {
+  const res = await fetch('/api/seasons');
+  seasons = await res.json();
 }
 
 function renderRoomOptions() {
@@ -28,6 +34,17 @@ function renderRoomOptions() {
   });
 }
 
+function getSeasonAdjustments(startDate, endDate) {
+  // Returns array of {type, value} for all seasons overlapping the booking
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  return seasons.filter(season => {
+    const s = new Date(season.start);
+    const e = new Date(season.end);
+    return start < e && end > s;
+  });
+}
+
 function checkRoomAvailability() {
   const startDateValue = document.getElementById('startDate').value;
   const endDateValue = document.getElementById('endDate').value;
@@ -40,7 +57,7 @@ function checkRoomAvailability() {
 
   roomCheckboxes.forEach(cb => {
     const roomId = parseInt(cb.value, 10);
-    const isBooked = confirmedBookings.some(booking => {
+    const isBooked = allBookings.some(booking => {
       // Check for date overlap
       const bookingStart = new Date(booking.startDate);
       const bookingEnd = new Date(booking.endDate);
@@ -76,14 +93,36 @@ function calculateTotalPrice() {
   let totalBeds = 0;
 
   roomCheckboxes.forEach(cb => {
-    total += parseInt(cb.dataset.price, 10) * nights;
+    let roomTotal = 0;
+    let basePrice = parseInt(cb.dataset.price, 10);
+
+    for (let i = 0; i < nights; i++) {
+      let day = new Date(startDate);
+      day.setDate(day.getDate() + i);
+
+      // Find all seasons overlapping this day
+      let percent = 0, flat = 0;
+      seasons.forEach(season => {
+        const s = new Date(season.start);
+        const e = new Date(season.end);
+        if (day >= s && day < e) {
+          if (season.type === 'percent') percent += season.value;
+          else if (season.type === 'flat') flat += season.value;
+        }
+      });
+
+      let nightPrice = basePrice * (1 + percent / 100) + flat;
+      roomTotal += nightPrice;
+    }
+
+    total += roomTotal;
     totalBeds += parseInt(cb.dataset.beds, 10);
   });
 
-  if (dog) total += 200; // example pet fee
-  if (breakfast) total += people * nights * 150; // example breakfast cost
+  if (dog) total += 200;
+  if (breakfast) total += people * nights * 150;
 
-  document.getElementById('total-price').textContent = total;
+  document.getElementById('total-price').textContent = Math.round(total);
 
   // Beds vs people check
   const bedsWarning = document.getElementById('beds-warning');
@@ -146,4 +185,8 @@ document.getElementById('booking-form').addEventListener('submit', async (e) => 
   }
 });
 
-loadRooms();
+Promise.all([loadRooms(), loadSeasons()]).then(() => {
+  renderRoomOptions();
+  checkRoomAvailability();
+  calculateTotalPrice();
+});
