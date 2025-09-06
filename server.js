@@ -20,6 +20,64 @@ app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
 // 📂 Serve public files
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Simple helper: ensure data file exists and return parsed JSON
+function readJsonFileSafe(p) {
+  try {
+    if (!fs.existsSync(p)) {
+      fs.writeFileSync(p, JSON.stringify([], null, 2));
+    }
+    return JSON.parse(fs.readFileSync(p, 'utf8') || '[]');
+  } catch (e) {
+    console.error('readJsonFileSafe error', p, e);
+    return [];
+  }
+}
+
+// GET all pending + archived common bookings (pending first)
+app.get('/api/common-bookings', (req, res) => {
+  const pendingPath = path.join(__dirname, 'data', 'pending-common-bookings.json');
+  const archivePath = path.join(__dirname, 'data', 'archive-common.json');
+  const pending = readJsonFileSafe(pendingPath);
+  const archive = readJsonFileSafe(archivePath);
+  // return pending first, then archive
+  res.json([].concat(pending, archive));
+});
+
+// GET common rooms list
+app.get('/api/common-rooms', (req, res) => {
+  const file = path.join(__dirname, 'data', 'common-rooms.json');
+  const rooms = readJsonFileSafe(file);
+  res.json(rooms);
+});
+
+// POST create pending common booking
+app.post('/api/common-bookings', (req, res) => {
+  try {
+    const { start, end, rooms, people, name, email, phone } = req.body || {};
+    if (!start || !end || !Array.isArray(rooms) || !rooms.length || !name || !email) {
+      return res.status(400).json({ success: false, message: 'Neplatná data rezervace.' });
+    }
+    const pendingPath = path.join(__dirname, 'data', 'pending-common-bookings.json');
+    const pending = readJsonFileSafe(pendingPath);
+    const booking = {
+      start,
+      end,
+      rooms,
+      people: Number(people) || 1,
+      name,
+      email,
+      phone: phone || '',
+      createdAt: new Date().toISOString(),
+      id: Date.now()
+    };
+    pending.push(booking);
+    fs.writeFileSync(pendingPath, JSON.stringify(pending, null, 2));
+    return res.json({ success: true, id: booking.id });
+  } catch (err) {
+    console.error('POST /api/common-bookings error', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
 // API routes
 app.get('/api/rooms', (req, res) => {
@@ -272,9 +330,9 @@ app.delete('/api/common-bookings/:id/cancel', (req, res) => {
     res.json({ success: true, message: "Rezervace byla zrušena." });
 });
 
-// Block entire building
+// Block (all or selected) rooms and common rooms
 app.post('/api/block-all', (req, res) => {
-    const { start, end } = req.body;
+    const { start, end, rooms: selectedRooms, commonRooms: selectedCommon } = req.body;
 
     if (!start || !end) {
         return res.status(400).json({ success: false, message: "Neplatné datum." });
@@ -283,88 +341,99 @@ app.post('/api/block-all', (req, res) => {
     const rooms = JSON.parse(fs.readFileSync('./data/rooms.json'));
     const commonRooms = JSON.parse(fs.readFileSync('./data/common-rooms.json'));
 
-    const fullBlockRooms = {
-        id: Date.now(),
-        rooms: rooms.map(r => r.id),
-        name: "Rezervace celé chaty (Admin)",
-        email: "admin@cottage.local",
-        phone: "",
-        people: rooms.reduce((sum, r) => sum + r.beds, 0),
-        dog: false,
-        breakfast: false,
-        startDate: start,
-        endDate: end
-    };
+    // Determine which IDs to block:
+    // - If caller explicitly provides an array (even empty), use that (empty = block none).
+    // - If caller provides neither rooms nor commonRooms, keep old behavior and block all.
+    const hasRoomsParam = Array.isArray(selectedRooms);
+    const hasCommonParam = Array.isArray(selectedCommon);
 
-    const fullBlockCommon = [];
+    const roomIdsToBlock = hasRoomsParam
+        ? (selectedRooms.length ? selectedRooms.map(Number) : [])
+        : (!hasCommonParam ? rooms.map(r => r.id) : []); // only default to ALL when neither param provided
 
-const startDateObj = new Date(start);
-const endDateObj = new Date(end);
+    const commonIdsToBlock = hasCommonParam
+        ? (selectedCommon.length ? selectedCommon.map(Number) : [])
+        : (!hasRoomsParam ? commonRooms.map(r => r.id) : []); // only default to ALL when neither param provided
 
-for (
-    let d = new Date(startDateObj);
-    d <= endDateObj;
-    d.setDate(d.getDate() + 1)
-) {
-    commonRooms.forEach(r => {
-        fullBlockCommon.push({
-            id: Date.now() + r.id + d.getDate(), // Unique ID per room & date
-            rooms: [r.id],
+    // add a single confirmed booking entry for the selected regular rooms (one booking spanning the whole period)
+    const confirmedRooms = JSON.parse(fs.readFileSync('./data/confirmed-bookings.json'));
+    if (roomIdsToBlock.length) {
+        const fullBlockRooms = {
+            id: Date.now(),
+            rooms: roomIdsToBlock,
             name: "Rezervace celé chaty (Admin)",
             email: "admin@cottage.local",
             phone: "",
-            people: r.capacity,
-            start: `${d.toISOString().split('T')[0]}T08:00`,
-            end: `${d.toISOString().split('T')[0]}T22:00`
-        });
-    });
-}
+            people: rooms.filter(r => roomIdsToBlock.includes(r.id)).reduce((sum, r) => sum + (r.beds || 0), 0),
+            dog: false,
+            breakfast: false,
+            startDate: start,
+            endDate: end
+        };
+        confirmedRooms.push(fullBlockRooms);
+    }
 
-
-
-    const confirmedRooms = JSON.parse(fs.readFileSync('./data/confirmed-bookings.json'));
+    // create a single confirmed booking entry for all selected common rooms spanning the whole period
     const confirmedCommon = JSON.parse(fs.readFileSync('./data/confirmed-common-bookings.json'));
+    if (commonIdsToBlock.length) {
+        const peopleTotal = commonRooms
+            .filter(r => commonIdsToBlock.includes(r.id))
+            .reduce((sum, r) => sum + (r.capacity || 0), 0);
 
-    confirmedRooms.push(fullBlockRooms);
-    fullBlockCommon.forEach(b => confirmedCommon.push(b));
-
+        confirmedCommon.push({
+            id: Date.now(),
+            rooms: commonIdsToBlock,
+            name: "Rezervace celé chaty (Admin)",
+            email: "admin@cottage.local",
+            phone: "",
+            people: peopleTotal,
+            // full-range timestamps for common booking
+            start: `${start}T08:00`,
+            end: `${end}T22:00`
+        });
+    }
 
     fs.writeFileSync('./data/confirmed-bookings.json', JSON.stringify(confirmedRooms, null, 2));
     fs.writeFileSync('./data/confirmed-common-bookings.json', JSON.stringify(confirmedCommon, null, 2));
 
-    res.json({ success: true, message: "Celá chata byla blokována." });
+    res.json({ success: true, message: "Blokace byla provedena." });
 });
 
 // Update room details
 app.post('/api/rooms/update', upload.array('photos', 10), (req, res) => {
-    const { id, price, beds, dogAllowed, dogFee, extraBedAllowed, extraBedFee } = req.body;
+    const { id, price, beds, dogAllowed, dogFee, extraBedAllowed, extraBedFee, description } = req.body;
     const rooms = JSON.parse(fs.readFileSync('./data/rooms.json'));
     const roomIndex = rooms.findIndex(r => r.id == id);
     if (roomIndex === -1) {
         return res.status(404).json({ success: false, message: "Pokoj nenalezen." });
     }
-    rooms[roomIndex].price = parseInt(price);
-    rooms[roomIndex].beds = parseInt(beds);
+    rooms[roomIndex].price = Number.isFinite(Number(price)) ? parseInt(price, 10) : rooms[roomIndex].price;
+    rooms[roomIndex].beds = Number.isFinite(Number(beds)) ? parseInt(beds, 10) : rooms[roomIndex].beds;
 
-    // Save dog/extra bed values
-    rooms[roomIndex].dogAllowed = dogAllowed === 'true' || dogAllowed === true;
-    rooms[roomIndex].dogFee = parseInt(dogFee) || 0;
-    rooms[roomIndex].extraBedAllowed = extraBedAllowed === 'true' || extraBedAllowed === true;
-    rooms[roomIndex].extraBedFee = parseInt(extraBedFee) || 0;
-
-    // Handle multiple photos
-    if (req.files && req.files.length > 0) {
-        rooms[roomIndex].photos = rooms[roomIndex].photos || [];
-        req.files.forEach(file => {
-            if (!rooms[roomIndex].photos.includes(file.filename)) {
-                rooms[roomIndex].photos.push(file.filename);
-            }
-        });
+    // Save description (if provided)
+    if (typeof description !== 'undefined') {
+      rooms[roomIndex].description = String(description);
     }
-
-    fs.writeFileSync('./data/rooms.json', JSON.stringify(rooms, null, 2));
-    res.json({ success: true });
-});
+ 
+     // Save dog/extra bed values
+     rooms[roomIndex].dogAllowed = dogAllowed === 'true' || dogAllowed === true;
+     rooms[roomIndex].dogFee = parseInt(dogFee) || 0;
+     rooms[roomIndex].extraBedAllowed = extraBedAllowed === 'true' || extraBedAllowed === true;
+     rooms[roomIndex].extraBedFee = parseInt(extraBedFee) || 0;
+ 
+     // Handle multiple photos
+     if (req.files && req.files.length > 0) {
+         rooms[roomIndex].photos = rooms[roomIndex].photos || [];
+         req.files.forEach(file => {
+             if (!rooms[roomIndex].photos.includes(file.filename)) {
+                 rooms[roomIndex].photos.push(file.filename);
+             }
+         });
+     }
+ 
+     fs.writeFileSync('./data/rooms.json', JSON.stringify(rooms, null, 2));
+     res.json({ success: true });
+ });
 
 // Get all bookings (confirmed + pending)
 app.get('/api/bookings/all', (req, res) => {

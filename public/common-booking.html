@@ -1,189 +1,135 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rezervace společného prostoru</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rezervace společných prostor</title>
+  <link rel="stylesheet" href="booking.css" />
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f5f5f5;
-      margin: 0;
-      padding: 20px;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    form {
-      background: #fff;
-      padding: 20px;
-      max-width: 500px;
-      margin: 0 auto;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    }
-    label {
-      display: block;
-      margin-top: 10px;
-      font-weight: bold;
-    }
-    input, select, button {
-      width: 100%;
-      padding: 10px;
-      margin-top: 5px;
-      margin-bottom: 15px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      font-size: 1rem;
-    }
-    button {
+    /* match booking.html look & layout */
+    body{font-family:Arial,Helvetica,sans-serif;background:#f7f7f7;padding:20px}
+    .wizard{max-width:720px;margin:0 auto;background:#fff;padding:18px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+    h1{margin-top:0}
+    .step{display:none}
+    .step.active{display:block}
+    .step-buttons{margin-top:16px;display:flex;gap:10px}
+    .slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:8px}
+    .slot{padding:10px;border-radius:6px;border:1px solid #ddd;background:#fff;display:flex;align-items:center;gap:8px}
+    .slot.disabled{background:#eee;color:#777;text-decoration:line-through;border-color:#ccc}
+    label{display:block}
+    .meta{font-size:0.9rem;color:#555}
+    .error{color:#b71c1c;margin-top:8px}
+    /* calendar styles */
+    .calendar { margin-top:12px; border:1px solid #e0e0e0; border-radius:6px; padding:8px; background:#fff; overflow:hidden; }
+    .cal-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; }
+    .cal-grid { display:grid; grid-template-columns: repeat(7,1fr); gap:4px; }
+    .cal-day { text-align:center; padding:8px; border-radius:4px; cursor:pointer; }
+    .cal-day.header { font-weight:600; background:transparent; cursor:default; }
+    .cal-day.today { outline:2px solid #2196F3; }
+    .cal-day.selected { background:#2196F3; color:#fff; }
+    .cal-day.disabled { color:#bbb; cursor:default; }
+
+    /* small calendar nav buttons (cleaner, smaller) */
+    #cal-prev, #cal-next {
       background: #4CAF50;
-      color: white;
-      font-size: 1.1rem;
-      cursor: pointer;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.95rem;
+      line-height: 1;
+      width: 38px;
+      height: 32px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
     }
-    button:hover {
-      background: #45a049;
+    #cal-prev:hover, #cal-next:hover { background: #f3f3f3; }
+
+    /* make date input compact so it doesn't stick out */
+    #date {
+      width: 160px;
+      max-width: 100%;
+      padding: 6px 8px;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+      display: inline-block;
+      vertical-align: middle;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #fff;
     }
-    #price {
-      font-weight: bold;
-      font-size: 1.2rem;
-      text-align: center;
-      margin-top: 10px;
-    }
-    #capacity-warning {
-      color: red;
-      font-weight: bold;
-      display: none;
-    }
+
+    @media (max-width:480px){ .slots{grid-template-columns:repeat(1,1fr)} }
   </style>
 </head>
 <body>
-  <h1>Rezervace společného prostoru</h1>
-  <form id="common-booking-form">
-    <p id="room-name"></p>
-    <p id="room-capacity"></p>
+  <div class="wizard">
+    <h1>Rezervace společných prostor</h1>
 
-    <label for="start">Začátek rezervace:</label>
-    <input type="datetime-local" id="start" name="start" required />
+    <!-- Step 1: select rooms (multiple) + calendar -->
+    <div class="step active" id="step-1">
+      <p>Vyberte jednu nebo více místností a datum:</p>
 
-    <label for="end">Konec rezervace:</label>
-    <input type="datetime-local" id="end" name="end" required />
+      <div id="rooms-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-bottom:12px"></div>
 
-    <label for="people">Počet osob:</label>
-    <input type="number" id="people" name="people" min="1" required />
+      <label>Vybrané datum: <input type="date" id="date" required /></label>
 
-    <p id="capacity-warning">⚠️ Počet osob překračuje kapacitu této místnosti!</p>
+      <div id="calendar-widget" class="calendar" aria-hidden="false">
+        <div class="cal-head">
+          <button type="button" id="cal-prev">&lt;</button>
+          <div id="cal-month"></div>
+          <button type="button" id="cal-next">&gt;</button>
+        </div>
+        <div id="cal-grid" class="cal-grid"></div>
+      </div>
 
-    <p id="price">Celková cena: 0 Kč</p>
+      <div class="step-buttons">
+        <button type="button" id="to-step-2">Další</button>
+      </div>
+    </div>
 
-    <label for="name">Jméno:</label>
-    <input type="text" id="name" name="name" required />
+    <!-- Step 2: timeslots -->
+    <div class="step" id="step-2">
+      <p>Vyberte časové bloky (3hodinové). Můžete vybrat více bloků. Již obsazené budou šedé a přeškrtnuté.</p>
+      <div id="slots" class="slots"></div>
+      <div id="slots-error" class="error" style="display:none">Vyberte alespoň jeden časový blok.</div>
 
-    <label for="email">Email:</label>
-    <input type="email" id="email" name="email" required
-           pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
-           title="Zadejte platnou e-mailovou adresu" />
+      <div class="step-buttons">
+        <button type="button" id="back-to-1">Zpět</button>
+        <button type="button" id="to-step-3">Další</button>
+      </div>
+    </div>
 
-    <label for="phone">Telefon:</label>
-    <input type="tel" id="phone" name="phone" required
-           pattern="^\+?\d{9,15}$"
-           title="Zadejte platné telefonní číslo (např. +420123456789)" />
+    <!-- Step 3: people + contact -->
+    <div class="step" id="step-3">
+      <p>Zadejte počet osob a kontaktní údaje pro odeslání žádosti:</p>
 
-    <button type="submit">Odeslat rezervaci</button>
-  </form>
+      <label>Počet osob:
+        <input type="number" id="people" min="1" value="1" />
+      </label>
 
-  <script>
-    let roomId = null;
-    let roomData = null;
+      <label>Jméno:
+        <input type="text" id="name" required />
+      </label>
 
-    async function loadRoomDetails() {
-      const params = new URLSearchParams(window.location.search);
-      roomId = parseInt(params.get('room'), 10);
-      const date = params.get('date'); // Optional prefill
+      <label>Email:
+        <input type="email" id="email" required />
+      </label>
 
-      const res = await fetch('/api/common-rooms');
-      const rooms = await res.json();
-      roomData = rooms.find(r => r.id === roomId);
+      <label>Telefon:
+        <input type="tel" id="phone" />
+      </label>
 
-      if (!roomData) {
-        alert('Společná místnost nenalezena.');
-        window.location.href = '/common.html';
-        return;
-      }
+      <div id="submit-msg" class="meta" style="margin-top:8px"></div>
 
-      document.getElementById('room-name').textContent = `${roomData.name}`;
-      document.getElementById('room-capacity').textContent = `Kapacita: ${roomData.capacity} osob`;
-      if (date) {
-        document.getElementById('start').value = date + 'T08:00';
-        document.getElementById('end').value = date + 'T10:00';
-      }
-    }
+      <div class="step-buttons">
+        <button type="button" id="back-to-2">Zpět</button>
+        <button type="button" id="submit-booking">Odeslat žádost</button>
+      </div>
+    </div>
+  </div>
 
-    function calculatePrice() {
-      const start = new Date(document.getElementById('start').value);
-      const end = new Date(document.getElementById('end').value);
-      const hours = (end - start) / (1000 * 60 * 60);
-      const people = parseInt(document.getElementById('people').value, 10);
-
-      const priceElem = document.getElementById('price');
-      const warning = document.getElementById('capacity-warning');
-
-      if (isNaN(hours) || hours <= 0) {
-        priceElem.textContent = 'Celková cena: 0 Kč';
-        return;
-      }
-
-      // Check capacity
-      if (people > roomData.capacity) {
-        warning.style.display = 'block';
-      } else {
-        warning.style.display = 'none';
-      }
-
-      const total = Math.ceil(hours) * roomData.pricePerHour;
-      priceElem.textContent = `Celková cena: ${total} Kč`;
-    }
-
-    document.getElementById('start').addEventListener('input', calculatePrice);
-    document.getElementById('end').addEventListener('input', calculatePrice);
-    document.getElementById('people').addEventListener('input', calculatePrice);
-
-    document.getElementById('common-booking-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      if (parseInt(document.getElementById('people').value, 10) > roomData.capacity) {
-        alert('Počet osob překračuje kapacitu této místnosti!');
-        return;
-      }
-
-      const payload = {
-        start: document.getElementById('start').value,
-        end: document.getElementById('end').value,
-        rooms: [roomId],
-        people: parseInt(document.getElementById('people').value, 10),
-        name: document.getElementById('name').value,
-        email: document.getElementById('email').value,
-        phone: document.getElementById('phone').value
-      };
-
-      const res = await fetch('/api/common-bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await res.json();
-      if (result.success) {
-        alert('Rezervace byla odeslána a čeká na potvrzení.');
-        window.location.href = '/common.html';
-      } else {
-        alert(result.message || 'Chyba při odesílání rezervace.');
-      }
-    });
-
-    loadRoomDetails();
-  </script>
+  <script src="common-booking-wizard.js"></script>
 </body>
 </html>

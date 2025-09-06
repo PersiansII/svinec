@@ -6,7 +6,6 @@ let bookingState = {
   startDate: "",
   endDate: "",
   people: 1,
-  roomCount: 1,
   rooms: [],
   dog: false,
   breakfast: false,
@@ -19,6 +18,37 @@ let bookingState = {
 };
 let galleryPhotos = [];
 let galleryIndex = 0;
+
+// --- occupancy helpers: keep per-room inputs bounded by total people and room caps ---
+function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+function updateOccupancyLimits() {
+  // sum currently assigned (treat missing as 0)
+  const ids = selectedRooms || [];
+  let sumAssigned = 0;
+  ids.forEach(id => {
+    const v = parseInt(document.getElementById(`occupancy-room-${id}`)?.value || '0', 10);
+    if (!isNaN(v)) sumAssigned += v;
+  });
+  // remaining that can still be assigned (may be 0)
+  let remaining = Math.max(0, bookingState.people - sumAssigned);
+
+  // For Each room set max = currentValue + remaining (bounded by room cap)
+  ids.forEach(id => {
+    const input = document.getElementById(`occupancy-room-${id}`);
+    if (!input) return;
+    const room = roomsData.find(r => r.id === id);
+    const cap = room ? (room.beds || bookingState.people) : bookingState.people;
+    const current = parseInt(input.value || '0', 10) || 0;
+    const maxAllowed = Math.min(cap, current + remaining);
+    input.max = String(Math.max(1, maxAllowed));
+    // if current exceeds new max, clamp and update bookingState
+    if (current > maxAllowed) {
+      input.value = String(maxAllowed);
+      bookingState.occupancy[id] = maxAllowed;
+    }
+  });
+}
 
 async function loadRooms() {
   const res = await fetch('/api/rooms');
@@ -82,37 +112,144 @@ function renderRoomsStep() {
   available.forEach(room => {
     const card = document.createElement('div');
     card.className = 'room-card';
+    // nicer card layout: photos left, info center, price prominent top-right
     card.innerHTML = `
-      <input type="checkbox" value="${room.id}" id="room-${room.id}">
-      <div class="room-photos">
-        ${(room.photos || ['default.jpg']).map((photo, idx) =>
-          `<img src="/images/rooms/${photo}" alt="${room.name}" style="width:80px;height:60px;margin-right:5px;border-radius:4px;cursor:pointer;" onclick='openPhotoModal(${JSON.stringify(room.photos || ['default.jpg'])},${idx})'>`
-        ).join('')}
-      </div>
-      <div>
-        <strong>${room.name}</strong><br>
-        <span>${room.description || ''}</span><br>
-        <span>💤 ${room.beds} lůžek</span><br>
-        <span>💵 ${getRoomPrice(room, bookingState.startDate, bookingState.endDate)} Kč celkem</span>
+      <div style="display:flex; gap:12px; align-items:flex-start; padding:10px; border-radius:8px; border:1px solid #e6e6e6; background:#fff;">
+        <div style="min-width:90px;">
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            ${(room.photos || ['default.jpg']).map((photo, idx) =>
+              `<img src="/images/rooms/${photo}" alt="${room.name}" style="width:90px;height:68px;object-fit:cover;border-radius:6px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.08);" onclick='openPhotoModal(${JSON.stringify(room.photos || ['default.jpg'])},${idx})'>`
+            ).join('')}
+          </div>
+        </div>
+
+        <div style="flex:1;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div style="padding-right:12px;">
+              <div style="font-size:1.05rem; font-weight:700; color:#222;">${room.name}</div>
+              <div class="room-desc" style="margin-top:8px; color:#444; line-height:1.35; white-space:pre-wrap;">${room.description || ''}</div>
+              <div style="margin-top:10px; color:#666; font-size:0.95rem;">💤 ${room.beds} lůžek</div>
+            </div>
+
+            <div style="text-align:right; margin-left:8px;">
+              <div style="font-weight:800; font-size:1.25rem; color:#b33; background:linear-gradient(180deg,#fff6f6,#fff); padding:8px 12px; border-radius:8px; border:1px solid rgba(179,51,51,0.08);">
+                ${getRoomPrice(room, bookingState.startDate, bookingState.endDate)} Kč
+              </div>
+              <div style="font-size:0.85rem; color:#888; margin-top:6px;">celkem</div>
+            </div>
+          </div>
+
+          <div class="room-occupancy-container" id="occ-container-${room.id}" style="margin-top:10px; display:none;"></div>
+
+          <div style="margin-top:10px;">
+            <label style="display:inline-flex; align-items:center; gap:8px; font-weight:600; color:#333;">
+              <input type="checkbox" value="${room.id}" id="room-${room.id}">
+              Vybrat pokoj
+            </label>
+          </div>
+        </div>
       </div>
     `;
-    card.querySelector('input').addEventListener('change', function() {
+    const cb = card.querySelector('input');
+
+    cb.addEventListener('change', function() {
       if (this.checked) {
-        if (selectedRooms.length < bookingState.roomCount) {
-          selectedRooms.push(room.id);
-        } else {
-          this.checked = false;
+        if (!selectedRooms.includes(room.id)) selectedRooms.push(room.id);
+
+        // show occupancy input for this room
+        const occContainer = document.getElementById(`occ-container-${room.id}`);
+        if (occContainer) {
+          occContainer.style.display = 'block';
+          const cap = room && room.beds ? room.beds : bookingState.people;
+          // create input
+          occContainer.innerHTML = `<strong>Počet osob v tomto pokoji:</strong> `;
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.id = `occupancy-room-${room.id}`;
+          input.min = 1;
+          input.max = String(Math.min(cap, bookingState.people));
+          input.value = String(Math.min(1, Math.min(cap, bookingState.people)));
+          input.style.width = '80px';
+          input.style.marginLeft = '6px';
+          // update bookingState on input, clamp on change
+          input.addEventListener('input', () => {
+            const raw = parseInt(input.value || '0', 10) || 0;
+            const maxAllowed = parseInt(input.max || String(cap), 10) || cap;
+            const v = clamp(raw, 1, maxAllowed);
+            if (v !== raw) input.value = String(v);
+            bookingState.occupancy[room.id] = v;
+            // after changing one input, update limits for others
+            updateOccupancyLimits();
+          });
+          occContainer.appendChild(input);
+          // initialize bookingState for this room
+          bookingState.occupancy[room.id] = parseInt(input.value, 10) || 1;
         }
+
+        // distribute reasonable defaults across selected rooms and then enforce limits
+        distributeOccupancyDefaults();
+        updateOccupancyLimits();
       } else {
+        // uncheck -> remove
         selectedRooms = selectedRooms.filter(id => id !== room.id);
+        delete bookingState.occupancy[room.id];
+        const occContainer = document.getElementById(`occ-container-${room.id}`);
+        if (occContainer) { occContainer.style.display = 'none'; occContainer.innerHTML = ''; }
+        distributeOccupancyDefaults();
+        updateOccupancyLimits();
       }
-      // Enforce max selection
-      document.querySelectorAll('#rooms-list input[type="checkbox"]').forEach(cb => {
-        cb.disabled = !cb.checked && selectedRooms.length >= bookingState.roomCount;
-      });
     });
+
     container.appendChild(card);
   });
+}
+
+// evenly distribute bookingState.people across selected rooms (respect capacities)
+function distributeOccupancyDefaults() {
+  const ids = [...selectedRooms];
+  if (!ids.length) return;
+  const caps = ids.map(id => {
+    const r = roomsData.find(rr => rr.id === id);
+    return { id, cap: r ? (r.beds || bookingState.people) : bookingState.people };
+  });
+
+  // start with 1 per room
+  let remaining = bookingState.people;
+  const assigned = {};
+  ids.forEach(id => { assigned[id] = 1; remaining -= 1; });
+
+  // respect caps
+  ids.forEach(id => {
+    const cap = caps.find(c => c.id === id).cap;
+    if (assigned[id] > cap) { remaining += assigned[id] - cap; assigned[id] = cap; }
+  });
+
+  // distribute remaining respecting caps
+  let loop = 0;
+  while (remaining > 0 && loop < 1000) {
+    let progressed = false;
+    for (const c of caps) {
+      if (remaining <= 0) break;
+      if ((assigned[c.id] || 0) < c.cap) {
+        assigned[c.id] = (assigned[c.id] || 0) + 1;
+        remaining--;
+        progressed = true;
+      }
+    }
+    if (!progressed) break;
+    loop++;
+  }
+
+  // write values to inputs and bookingState
+  ids.forEach(id => {
+    const el = document.getElementById(`occupancy-room-${id}`);
+    const val = Math.max(1, Math.min(assigned[id] || 1, caps.find(c => c.id === id).cap));
+    if (el) el.value = val;
+    bookingState.occupancy[id] = val;
+  });
+
+  // enforce per-input limits relative to total people
+  updateOccupancyLimits();
 }
 
 function renderSummary() {
@@ -173,17 +310,15 @@ function calculateTotalPrice() {
 }
 
 document.getElementById('to-step-2').onclick = async function() {
-  const { start: startDate, end: endDate } = window.getSelectedDates();
+  const { start: startDate, end: endDate } = window.getSelectedDates ? window.getSelectedDates() : { start: null, end: null };
   const people = parseInt(document.getElementById('people').value, 10);
-  const roomCount = parseInt(document.getElementById('roomCount').value, 10);
-  if (!startDate || !endDate || !people || !roomCount || new Date(startDate) >= new Date(endDate)) {
+  if (!startDate || !endDate || !people || new Date(startDate) >= new Date(endDate)) {
     alert('Vyberte platný termín a vyplňte všechna pole.');
     return;
   }
   bookingState.startDate = startDate;
   bookingState.endDate = endDate;
   bookingState.people = people;
-  bookingState.roomCount = roomCount;
   await loadRooms();
   await loadBookings();
   await loadSeasons();
@@ -196,12 +331,32 @@ document.getElementById('back-to-1').onclick = function() {
 };
 
 document.getElementById('to-step-3').onclick = function() {
-  if (selectedRooms.length !== bookingState.roomCount) {
-    document.getElementById('rooms-error').style.display = 'block';
+  if (selectedRooms.length < 1) {
+    const el = document.getElementById('rooms-error');
+    if (el) { el.textContent = 'Vyberte prosím alespoň jeden pokoj.'; el.style.display = 'block'; }
     return;
   }
-  document.getElementById('rooms-error').style.display = 'none';
+
+  // Validate occupancy inputs exist and sum to total people
+  let sum = 0;
+  let missing = false;
+  selectedRooms.forEach(id => {
+    const occEl = document.getElementById(`occupancy-room-${id}`);
+    const val = occEl ? parseInt(occEl.value, 10) : NaN;
+    if (!occEl || isNaN(val) || val < 1) missing = true;
+    else sum += val;
+  });
+
+  if (missing || sum !== bookingState.people) {
+    const el = document.getElementById('rooms-error');
+    if (el) { el.textContent = 'Přiřaďte prosím osoby do pokojů tak, aby součet odpovídal počtu osob.'; el.style.display = 'block'; }
+    return;
+  }
+
+  const elErr = document.getElementById('rooms-error');
+  if (elErr) elErr.style.display = 'none';
   bookingState.rooms = [...selectedRooms];
+  // occupancy already stored in bookingState.occupancy
   renderServicesStep();
   showStep(2);
 };
@@ -371,18 +526,13 @@ function renderServicesStep() {
   const container = document.getElementById('services-list');
   container.innerHTML = '';
 
-  // Per-room occupancy + dog and extra bed
+  // Per-room service options (occupancy inputs are managed in Step 2)
   bookingState.rooms.forEach(roomId => {
     const room = roomsData.find(r => r.id === roomId);
-    const maxPeople = room && room.beds ? room.beds : bookingState.people;
-    const defaultOccupancy = Math.min(maxPeople, Math.ceil(bookingState.people / bookingState.roomCount));
-
-    // Occupancy input
+    // Room header only; occupancy inputs are intentionally NOT duplicated here
     container.innerHTML += `
       <div style="margin-bottom:8px;">
-        <strong>${room ? room.name : roomId}</strong><br>
-        Počet osob v tomto pokoji:
-        <input type="number" id="occupancy-room-${roomId}" min="1" max="${maxPeople}" value="${defaultOccupancy}" style="width:80px; margin-left:6px;">
+        <strong>${room ? room.name : roomId}</strong>
       </div>
     `;
 

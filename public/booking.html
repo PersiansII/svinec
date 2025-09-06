@@ -67,7 +67,6 @@
   </style>
 </head>
 <body>
-  <h1>Rezervace ubytování</h1>
   <form id="booking-form">
 
     <!-- Step 1: Date, people, rooms -->
@@ -78,9 +77,7 @@
       <label>Počet osob:<br>
         <input type="number" id="people" min="1" required>
       </label><br>
-      <label>Počet pokojů:<br>
-        <input type="number" id="roomCount" min="1" required>
-      </label><br>
+      <!-- Počet pokojů odstraněn: uživatel vybere libovolný počet pokojů v dalším kroku -->
       <div class="step-buttons">
         <button type="button" id="to-step-2">Další</button>
       </div>

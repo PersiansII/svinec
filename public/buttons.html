@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rezervace - výběr</title>
+  <style>
+    :root{--accent:#2196F3;--muted:#f7f7f7;--card:#fff}
+    body{font-family:Arial,Helvetica,sans-serif;background:var(--muted);margin:0;padding:20px;box-sizing:border-box;color:#222}
+    /* make the main box use available width so the frame can be larger */
+    .box{max-width:100%;width:100%;margin:0 auto;background:var(--card);padding:18px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+    h1{margin:0 0 12px; text-align:center;} /* centered title */
+    .controls{
+      display:flex;
+      gap:8px;
+      margin-bottom:12px;
+      justify-content:center; /* center the buttons */
+      align-items:center;
+    }
+    .tab-btn{
+      appearance:none;border:1px solid #ddd;background:#fafafa;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:1rem;
+    }
+    .tab-btn.active{background:var(--accent);color:#fff;border-color:#1976D2}
+    /* viewport under the buttons: full width and taller */
+    .frame-wrap{width:100%;max-width:100vw;height:80vh;border:1px solid #e8e8e8;border-radius:6px;overflow:hidden}
+    iframe{width:100%;height:100%;border:0}
+    @media (max-width:640px){
+      .frame-wrap{height:70vh}
+      .controls{flex-direction:column;align-items:center} /* keep buttons centered on small screens */
+      .controls .tab-btn{width:100%;max-width:320px}
+    }
+  </style>
+</head>
+<body>
+  <div class="box" role="main">
+    <h1>Rezervace</h1>
+
+    <div class="controls" role="tablist" aria-label="Výběr typu rezervace">
+      <button id="btn-common" class="tab-btn" role="tab" aria-selected="false">Společný prostor</button>
+      <button id="btn-rooms" class="tab-btn" role="tab" aria-selected="false">Pokoje</button>
+    </div>
+
+    <div class="frame-wrap" id="frame-wrap" aria-live="polite">
+      <iframe id="booking-frame" src="/booking.html" title="Rezervace"></iframe>
+    </div>
+  </div>
+
+  <script>
+    const btnCommon = document.getElementById('btn-common');
+    const btnRooms = document.getElementById('btn-rooms');
+    const frame = document.getElementById('booking-frame');
+
+    // Choose initial tab from query ?tab=common or ?tab=rooms
+    const url = new URL(window.location.href);
+    const q = (url.searchParams.get('tab') || '').toLowerCase();
+
+    function setActive(button, src) {
+      [btnCommon, btnRooms].forEach(b => {
+        b.classList.toggle('active', b === button);
+        b.setAttribute('aria-selected', b === button ? 'true' : 'false');
+      });
+      if (frame.src !== src) frame.src = src;
+    }
+
+    btnCommon.addEventListener('click', () => setActive(btnCommon, '/common-booking.html'));
+    btnRooms.addEventListener('click', () => setActive(btnRooms, '/booking.html'));
+
+    // initial
+    if (q === 'common') setActive(btnCommon, '/common-booking.html');
+    else setActive(btnRooms, '/booking.html');
+  </script>
+</body>
+</html>

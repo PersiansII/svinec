@@ -14,7 +14,8 @@
       "bbf84ff3ad120d0df86643a2debc1c4e",
       "23834f231a08fa186864f6af480ab93a",
       "4daa3bccd0fbb6c03666a111dc661f5f"
-    ]
+    ],
+    "description": "🌿 Útulný a prostorný pokoj\r\n🛏️ Manželská postel pro 2 osoby\r\n🛋️ Jednolůžková postel\r\n\r\n➕ Možnost přistýlky\r\n🚿 Vlastní koupelna\r\n🐕 Pobyt se psem povolen\r\n"
   },
   {
     "id": 2,
@@ -22,8 +23,8 @@
     "price": 900,
     "beds": 4,
     "dogAllowed": true,
-    "dogFee": 100,
-    "extraBedAllowed": false,
+    "dogFee": 0,
+    "extraBedAllowed": true,
     "extraBedFee": 0,
     "image": "/images/pokoj2.jpg",
     "photo": "d560293682371b4f0944686247f0a285",
@@ -31,7 +32,8 @@
       "680ac67bdd0fdf67fbaedb68aae57487",
       "b72116d7c8529f2e69ffe5cac710cadf",
       "490422b5025eb24341c2fe6c908e0124"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 3,
@@ -48,7 +50,8 @@
       "46ae4675d51c32713e0c5a1db8292e5c",
       "1ec624a944a9582c25f8317deff2251d",
       "04756d7c9822a3d8394b264f0d546161"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 4,
@@ -64,7 +67,8 @@
     "photos": [
       "ea7129b4b3af6134f46bc304558b8c38",
       "9e15a35acc043abc132d4850244699d6"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 5,
@@ -83,7 +87,8 @@
       "a4485b55b7ae73dd65db584a9e190c3a",
       "e0b8d70158fb082f1a9d5d773379d379",
       "4d262035aa1b49e9bf2b0d637eb0287b"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 6,
@@ -100,7 +105,8 @@
       "c60c28c68b1497e9119a594a4798c627",
       "50f56c134c439ab8561fcce2b961c08a",
       "2ee878c46ebb089280e26c906b68b765"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 7,
@@ -118,7 +124,8 @@
       "14e2e240bbd4910f42562077e7b6f9eb",
       "3380038b1d0a2708272d0080cd65140f",
       "a42f8914e916f90f3518d75e281d8edb"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 8,
@@ -134,7 +141,8 @@
     "photos": [
       "c7b39db22efed6661da8e5f1da8add7c",
       "23ba988257b660b5a9ce4c012db4506e"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 9,
@@ -152,7 +160,8 @@
       "ec2c37f0c41d13145f208a1a6f08d247",
       "a3a169a98cee11e51c2e7e3574a4a9e3",
       "a10c04ab66e1e61e4890d88972188c63"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 10,
@@ -168,7 +177,8 @@
     "photos": [
       "d01d3e248843252cbec0d92d38038f3f",
       "0897fdd000ea98efe551fbec5ee123b9"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 11,
@@ -184,7 +194,8 @@
     "photos": [
       "df0a78b2bc1ef3d4dea27661fcdca816",
       "2caf0ed5b1281b169ce603da88a91f40"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 12,
@@ -201,7 +212,8 @@
       "18bc9663cd168bf548005fc2833455f0",
       "b31135ac4ec441516a0f05d8127724cb",
       "07055efe99dc1e9e49ce3a95534b9bdb"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 13,
@@ -218,7 +230,8 @@
       "78f057d4cd690e055fb7ed553bfc0d31",
       "e863a8792c23c491964e373f866c9c93",
       "f21f0a1ec02d21ae626b99637eb7d62a"
-    ]
+    ],
+    "description": "Testing"
   },
   {
     "id": 14,
@@ -237,6 +250,7 @@
       "a6f8d59ac0606a286c2d86a02d91b0a5",
       "2dd956134c77076631215bec87e02be6",
       "63fb11e0225ee6ae6494d6761c930dbd"
-    ]
+    ],
+    "description": "Testing"
   }
 ]
