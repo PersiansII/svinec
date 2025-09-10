@@ -6,9 +6,10 @@
   <title>Dostupnost Pokojů</title>
   <link rel="stylesheet" href="styles.css">
   <style>
-    /* center everything and constrain width so calendar fits nicely */
+    /* center everything and make wrapper take ~90% of viewport width */
     .center-wrap {
-      max-width: 1000px;
+      width: 90vw;           /* take 90% of viewport width */
+      max-width: 1400px;     /* don't grow too large on very wide screens */
       margin: 0 auto;
       padding: 20px;
       box-sizing: border-box;
@@ -17,10 +18,28 @@
       align-items: center;
       gap: 12px;
     }
-    .calendar-header { width: 100%; display:flex; justify-content:center; align-items:center; gap:8px; }
-    #calendar-container { width: 100%; }
+
+    .calendar-header {
+      width: 100%;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap:8px;
+    }
+
+    /* ensure calendar container can expand to wrapper width and allow horizontal scroll if needed */
+    #calendar-container, #half-calendar-container {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      overflow-x: auto;
+    }
+
+    @media (max-width: 1024px) {
+      .center-wrap { width: 94vw; }
+    }
     @media (max-width:640px){
-      .center-wrap { padding:12px; }
+      .center-wrap { padding:12px; width: 98vw; }
     }
   </style>
 </head>
@@ -31,16 +50,13 @@
       <span id="current-month"></span>
       <button id="next-month">➡️</button>
     </div>
-    <div id="calendar-container">
-      <table id="calendar">
-        <thead>
-          <tr>
-            <th>Pokoj</th>
-          </tr>
-        </thead>
-        <tbody id="calendar-body">
-        </tbody>
-      </table>
+
+    <!-- half-day (ráno/odpoledne) kalendář -->
+    <div id="half-calendar-section" style="width:100%; margin-top:18px;">
+      <div class="calendar-header" style="justify-content:center; gap:8px;">
+        
+      </div>
+      <div id="half-calendar-container"></div>
     </div>
   </div>
 

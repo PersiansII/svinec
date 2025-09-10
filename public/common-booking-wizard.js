@@ -173,6 +173,12 @@ function overlaps(aStartISO, aEndISO, bStartISO, bEndISO) {
   return aS < bE && aE > bS;
 }
 
+// replace multiple small-slot starts with two slots: dopoledne / odpoledne
+const SLOTS = [
+  { label: 'Dopoledne', start: 6, end: 12 },   // 06:00 – 12:00
+  { label: 'Odpoledne', start: 12, end: 24 }   // 12:00 – 24:00 (midnight)
+];
+
 function renderSlots() {
   const container = document.getElementById('slots');
   container.innerHTML = '';
@@ -187,9 +193,9 @@ function renderSlots() {
     return;
   }
 
-  SLOT_STARTS.forEach((startHour, idx) => {
-    const slotStartISO = toISODateTime(date, startHour);
-    const slotEndISO = toISODateTime(date, startHour + 3);
+  SLOTS.forEach((slotObj, idx) => {
+    const slotStartISO = toISODateTime(date, slotObj.start);
+    const slotEndISO = toISODateTime(date, slotObj.end);
 
     // disabled if ANY selected room has a booking overlapping this slot
     const disabled = commonBookings.some(b => {
@@ -202,12 +208,13 @@ function renderSlots() {
       return overlaps(slotStartISO, slotEndISO, bStart, bEnd);
     });
 
+    const displayEndHour = slotObj.end % 24;
     const slot = document.createElement('label');
     slot.className = 'slot' + (disabled ? ' disabled' : '');
     slot.innerHTML = `
       <input type="checkbox" data-idx="${idx}" ${disabled ? 'disabled' : ''} />
       <div>
-        <div><strong>${String(startHour).padStart(2,'0')}:00 – ${String((startHour+3)%24).padStart(2,'0')}:00</strong></div>
+        <div><strong>${slotObj.label} (${String(slotObj.start).padStart(2,'0')}:00 – ${String(displayEndHour).padStart(2,'0')}:00)</strong></div>
         <div class="meta">${disabled ? 'Obsazeno (alespoň jedna vybraná místnost)' : 'Volné'}</div>
       </div>
     `;
@@ -284,8 +291,8 @@ document.getElementById('submit-booking').onclick = async function() {
   const roomsPayload = selectedRoomIds.map(r => (isNaN(Number(r)) ? r : Number(r)));
 
   for (const [sIdx, eIdx] of groups) {
-    const startHour = SLOT_STARTS[sIdx];
-    const endHour = SLOT_STARTS[eIdx] + 3;
+    const startHour = SLOTS[sIdx].start;
+    const endHour = SLOTS[eIdx].end;
     const startISO = toISODateTime(date, startHour);
     const endISO = toISODateTime(date, endHour);
     const payload = {

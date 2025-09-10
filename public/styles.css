@@ -1,4 +1,3 @@
-
 :root{
   --bg: #f6f8fb;
   --card: #ffffff;
@@ -20,25 +19,28 @@ body{
 
 /* Center wrapper */
 .center-wrap{
-  max-width:1100px;
+  max-width: 90vw;        /* was 1100px -> wider, responsive to viewport */
+  width: 90vw;            /* prefer taking ~90% of viewport width */
   margin:28px auto;
-  padding:20px;
+  padding:12px;  /* less vertical padding */
   box-sizing:border-box;
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:18px;
+  gap:10px;
 }
 
-/* Card around calendar */
-.calendar-card{
+/* Calendar card — lifted, soft gradient, subtle depth */
+.calendar-card {
   width:100%;
-  background:var(--card);
-  border-radius:var(--radius);
-  box-shadow:var(--soft-shadow);
-  padding:16px;
-  box-sizing:border-box;
-  overflow:hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(250,250,252,0.98) 100%);
+  border-radius: 14px;
+  padding:12px;
+  box-sizing: border-box;
+  box-shadow:
+    0 8px 30px rgba(14,20,41,0.08),
+    inset 0 1px 0 rgba(255,255,255,0.6);
+  border: 1px solid rgba(16,24,40,0.04);
 }
 
 /* Header with month + controls */
@@ -47,7 +49,7 @@ body{
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  margin-bottom:12px;
+  margin-bottom:14px;
 }
 .calendar-title{
   font-weight:600;
@@ -65,19 +67,20 @@ body{
 
 /* small icon-style buttons */
 .button-icon{
-  background:transparent;
-  border:1px solid rgba(15,23,42,0.06);
-  height:36px;
-  min-width:36px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(246,249,255,0.9));
+  border: 1px solid rgba(16,24,40,0.06);
+  height:40px;
+  min-width:40px;
   padding:6px;
-  border-radius:8px;
+  border-radius:10px;
   display:inline-flex;
   align-items:center;
   justify-content:center;
   cursor:pointer;
-  transition:transform .12s ease, background .12s;
+  transition: transform .12s ease, box-shadow .12s ease;
+  box-shadow: 0 4px 12px rgba(16,24,40,0.06), inset 0 1px 0 rgba(255,255,255,0.6);
 }
-.button-icon:hover{ transform:translateY(-2px); background:rgba(37,99,235,0.04); }
+.button-icon:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(16,24,40,0.09); }
 
 /* view toggle pill */
 .view-toggle{
@@ -112,13 +115,13 @@ body{
 /* day tile */
 .cal-day{
   background:transparent;
-  padding:10px 8px;
+  padding:8px 6px;
   border-radius:10px;
   text-align:center;
   cursor:pointer;
   transition:transform .12s ease, box-shadow .12s ease, background .12s;
   user-select:none;
-  min-height:78px;
+  min-height:62px; /* was 78px */
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -285,4 +288,194 @@ th[data-today="true"] {
 th[data-today="true"] {
   border-bottom: 2px solid #1976d2 !important;
   background: #e3f2fd !important;
+}
+
+/* Half-day (diagonal) cell visuals */
+.half-table {
+  width:100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 2px; /* reduced gap between cells (2px) */
+  margin-top: 4px;     /* smaller top gap */
+}
+.half-table th, .half-table td {
+  padding: 0;
+  min-width: 24px;    /* slightly smaller so more fit */
+  padding: 1px;       /* reduced padding */
+  height: 28px;       /* reduced height (was ~36) */
+  vertical-align: middle;
+  text-align: center;
+  position: relative;
+  background: transparent;
+  border: none;
+}
+.half-table thead th {
+  background: transparent;
+  color: #263147;
+  font-weight:700;
+  padding:6px 4px;
+}
+
+/* first column wider for room names with card feel */
+.half-table th:first-child,
+.half-table td:first-child {
+  width: 150px;       /* narrower */
+  text-align: left;
+  padding: 6px 8px;   /* less vertical space */
+  border-radius: 8px;
+}
+
+/* cell container with subtle 3D panel */
+.half-cell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(245,247,250,0.6));
+  box-shadow: 0 6px 10px rgba(16,24,40,0.04), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+/* triangular halves using clip-path with soft inner shadows */
+.half {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  display:block;
+  transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+  backface-visibility: hidden;
+}
+
+/* morning / afternoon shapes */
+.half.morning {
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  transform-origin: left top;
+  box-shadow: inset -6px -10px 24px rgba(14,20,41,0.03);
+}
+.half.afternoon {
+  clip-path: polygon(100% 100%, 0 100%, 100% 0);
+  transform-origin: right bottom;
+  box-shadow: inset 6px 10px 24px rgba(14,20,41,0.03);
+}
+
+/* color states — richer gradients */
+.half.available {
+  background: linear-gradient(180deg, #6EE7B7 0%, #34D399 100%);
+  opacity: 0.95;
+  color: #053019;
+}
+.half.booked {
+  background: linear-gradient(180deg, #F87171 0%, #EF4444 100%);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(239,68,68,0.12);
+}
+.half.partial {
+  background: linear-gradient(180deg, #FFE9A8 0%, #FFD166 100%);
+  color: #2b2b00;
+}
+.half.pending {
+  background: linear-gradient(180deg, #FFECB3 0%, #FFE082 100%);
+  color: #333;
+}
+
+/* checkout visual (morning only) — vivid blue */
+.half.morning.checkout {
+  background: linear-gradient(180deg, #2EA3FF 0%, #0077E6 100%);
+  color: #fff;
+  box-shadow: 0 8px 30px rgba(2, 118, 255, 0.14);
+}
+
+/* hover: slightly lift the cell for affordance */
+.half-table td:hover .half-cell {
+  transform: translateY(-2px) scale(1.002);
+  box-shadow: 0 8px 20px rgba(16,24,40,0.05);
+}
+
+/* small legend updated */
+.half-legend { display:flex; gap:12px; align-items:center; margin-top:12px; font-size:0.92rem; color:#25303f; }
+.half-legend .item { display:flex; gap:8px; align-items:center; }
+.half-legend .sw { width:22px; height:14px; border-radius:6px; display:inline-block; box-shadow: 0 4px 12px rgba(16,24,40,0.06); }
+
+/* preserve earlier colors for legend markers */
+.half-legend .sw.booked { background: linear-gradient(180deg,#F87171,#EF4444); }
+.half-legend .sw.partial { background: linear-gradient(180deg,#FFE9A8,#FFD166); }
+.half-legend .sw.pending { background: linear-gradient(180deg,#FFECB3,#FFE082); }
+.half-legend .sw.available { background: linear-gradient(180deg,#6EE7B7,#34D399); }
+.half-legend .sw.checkout { background: linear-gradient(180deg,#2EA3FF,#0077E6); }
+
+/* Responsive wrapper for the half-day calendar */
+#half-calendar-container {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px;
+  box-sizing: border-box;
+}
+
+/* Make table fluid so it can shrink to container width */
+.half-table {
+  width: 100%;              /* allow table to fit container and shrink */
+  table-layout: fixed;      /* distribute available width evenly */
+  border-collapse: separate;
+  border-spacing: 2px;
+  margin-top: 4px;
+  font-size: clamp(10px, 0.9vw, 13px); /* scale fonts with viewport */
+}
+
+/* Compact cells that scale down */
+.half-table th,
+.half-table td {
+  min-width: 18px;         /* allow tighter packing */
+  max-width: 48px;
+  padding: 0;
+  height: clamp(22px, 2.2vh, 34px);
+  box-sizing: border-box;
+  vertical-align: middle;
+  text-align: center;
+}
+
+/* First column (room name) becomes a responsive width */
+.half-table th:first-child,
+.half-table td:first-child {
+  width: clamp(110px, 18vw, 220px); /* fluid but bounded */
+  min-width: 90px;
+  padding: 6px 8px;
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(245,247,250,0.96));
+  box-shadow: 2px 0 6px rgba(16,24,40,0.04);
+}
+
+/* Shrink geometric shapes so diagonals still look good on small screens */
+.half-cell { border-radius: 6px; }
+.half { transition: transform .08s ease, box-shadow .08s ease, opacity .08s ease; }
+
+/* Further reductions on narrower viewports */
+@media (max-width: 1100px) {
+  .half-table { font-size: clamp(10px, 1vw, 12px); }
+  .half-table th:first-child { width: clamp(100px, 16vw, 200px); }
+  .half-table th, .half-table td { min-width: 16px; height: 28px; }
+}
+
+@media (max-width: 760px) {
+  .center-wrap { padding: 10px; gap:8px; }
+  .half-table { font-size: 11px; }
+  .half-table th:first-child { width: clamp(90px, 20vw, 160px); }
+  .half-table th, .half-table td { min-width: 14px; height: 26px; }
+  .half-cell { box-shadow: 0 4px 8px rgba(16,24,40,0.04); }
+}
+
+/* Smallest screens: reduce paddings and allow compact inline layout if needed */
+@media (max-width: 420px) {
+  .half-table { font-size: 10px; border-spacing: 1px; }
+  .half-table th:first-child { width: 90px; padding: 4px 6px; }
+  .half-table th, .half-table td { min-width: 12px; height: 24px; }
+  /* fallback: allow horizontal scroll but keep everything readable */
+  #half-calendar-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }

@@ -22,32 +22,64 @@ let galleryIndex = 0;
 // --- occupancy helpers: keep per-room inputs bounded by total people and room caps ---
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
+// Replace updateOccupancyLimits: only enforce per-room caps (no global constraint)
 function updateOccupancyLimits() {
-  // sum currently assigned (treat missing as 0)
   const ids = selectedRooms || [];
-  let sumAssigned = 0;
-  ids.forEach(id => {
-    const v = parseInt(document.getElementById(`occupancy-room-${id}`)?.value || '0', 10);
-    if (!isNaN(v)) sumAssigned += v;
-  });
-  // remaining that can still be assigned (may be 0)
-  let remaining = Math.max(0, bookingState.people - sumAssigned);
-
-  // For Each room set max = currentValue + remaining (bounded by room cap)
   ids.forEach(id => {
     const input = document.getElementById(`occupancy-room-${id}`);
     if (!input) return;
     const room = roomsData.find(r => r.id === id);
-    const cap = room ? (room.beds || bookingState.people) : bookingState.people;
-    const current = parseInt(input.value || '0', 10) || 0;
-    const maxAllowed = Math.min(cap, current + remaining);
-    input.max = String(Math.max(1, maxAllowed));
-    // if current exceeds new max, clamp and update bookingState
-    if (current > maxAllowed) {
-      input.value = String(maxAllowed);
-      bookingState.occupancy[id] = maxAllowed;
+    const cap = room ? (room.beds || 99) : 99;
+    input.max = String(Math.max(1, cap));
+    // clamp current value to new max
+    const cur = parseInt(input.value || '0', 10) || 1;
+    if (cur > cap) {
+      input.value = String(cap);
+      bookingState.occupancy[id] = cap;
     }
   });
+}
+
+// NEW: update order summary for Step 2 / Step 3
+function updateOrderSummary(stepNumber) {
+  const start = bookingState.startDate ? new Date(bookingState.startDate) : null;
+  const end = bookingState.endDate ? new Date(bookingState.endDate) : null;
+  let nights = 0;
+  if (start && end) nights = Math.round((end - start) / (1000*60*60*24));
+  let peopleSum = 0;
+  const roomIds = stepNumber === 2 ? selectedRooms : (bookingState.rooms || []);
+  roomIds.forEach(id => {
+    const v = parseInt(document.getElementById(`occupancy-room-${id}`)?.value || '0', 10) || 0;
+    peopleSum += v;
+  });
+
+  // Price: use calculateTotalPrice() so services (dog, extra bed, breakfast) are included
+  // Ensure bookingState reflects current service selections before calling
+  let price = 0;
+  if (stepNumber === 2) {
+    // sum room prices for currently selectedRooms (services not chosen yet)
+    roomIds.forEach(id => {
+      const r = roomsData.find(rr => rr.id === id);
+      if (r && bookingState.startDate && bookingState.endDate) {
+        price += getRoomPrice(r, bookingState.startDate, bookingState.endDate);
+      }
+    });
+  } else {
+    // step 3+ use full calculation including services
+    price = calculateTotalPrice();
+  }
+
+  const summaryId = stepNumber === 2 ? 'order-summary-2' : 'order-summary-3';
+  const el = document.getElementById(summaryId);
+  if (!el) return;
+  el.innerHTML = `
+    <div style="margin-top:12px; padding:10px; border-radius:8px; background:#fff; border:1px solid #e6e6e6;">
+      <div><strong>Datum:</strong> ${bookingState.startDate || '-'} – ${bookingState.endDate || '-'}</div>
+      <div><strong>Počet nocí:</strong> ${nights}</div>
+      <div><strong>Počet osob (součet po pokojích):</strong> ${peopleSum}</div>
+      <div><strong>Cena (vč. služeb):</strong> ${price} Kč</div>
+    </div>
+  `;
 }
 
 async function loadRooms() {
@@ -160,48 +192,56 @@ function renderRoomsStep() {
         const occContainer = document.getElementById(`occ-container-${room.id}`);
         if (occContainer) {
           occContainer.style.display = 'block';
-          const cap = room && room.beds ? room.beds : bookingState.people;
+          const cap = room && room.beds ? room.beds : 99;
           // create input
           occContainer.innerHTML = `<strong>Počet osob v tomto pokoji:</strong> `;
           const input = document.createElement('input');
           input.type = 'number';
           input.id = `occupancy-room-${room.id}`;
           input.min = 1;
-          input.max = String(Math.min(cap, bookingState.people));
-          input.value = String(Math.min(1, Math.min(cap, bookingState.people)));
+          input.max = String(Math.max(1, cap));
+          input.value = '1';
           input.style.width = '80px';
           input.style.marginLeft = '6px';
-          // update bookingState on input, clamp on change
+          // update bookingState on input
           input.addEventListener('input', () => {
-            const raw = parseInt(input.value || '0', 10) || 0;
-            const maxAllowed = parseInt(input.max || String(cap), 10) || cap;
-            const v = clamp(raw, 1, maxAllowed);
-            if (v !== raw) input.value = String(v);
-            bookingState.occupancy[room.id] = v;
-            // after changing one input, update limits for others
+            let raw = parseInt(input.value || '0', 10) || 1;
+            raw = clamp(raw, 1, parseInt(input.max,10));
+            if (String(raw) !== input.value) input.value = String(raw);
+            bookingState.occupancy[room.id] = raw;
             updateOccupancyLimits();
+            updateOrderSummary(2);
           });
           occContainer.appendChild(input);
           // initialize bookingState for this room
-          bookingState.occupancy[room.id] = parseInt(input.value, 10) || 1;
+          bookingState.occupancy[room.id] = 1;
         }
 
-        // distribute reasonable defaults across selected rooms and then enforce limits
-        distributeOccupancyDefaults();
+        // Update summary and limits
         updateOccupancyLimits();
+        updateOrderSummary(2);
       } else {
         // uncheck -> remove
         selectedRooms = selectedRooms.filter(id => id !== room.id);
         delete bookingState.occupancy[room.id];
         const occContainer = document.getElementById(`occ-container-${room.id}`);
         if (occContainer) { occContainer.style.display = 'none'; occContainer.innerHTML = ''; }
-        distributeOccupancyDefaults();
         updateOccupancyLimits();
+        updateOrderSummary(2);
       }
     });
 
     container.appendChild(card);
   });
+
+  // Add order summary container at bottom of step 2
+  let summaryEl = document.getElementById('order-summary-2');
+  if (!summaryEl) {
+    summaryEl = document.createElement('div');
+    summaryEl.id = 'order-summary-2';
+    container.appendChild(summaryEl);
+  }
+  updateOrderSummary(2);
 }
 
 // evenly distribute bookingState.people across selected rooms (respect capacities)
@@ -254,8 +294,13 @@ function distributeOccupancyDefaults() {
 
 function renderSummary() {
   const ul = document.getElementById('summary-list');
+  const start = bookingState.startDate ? new Date(bookingState.startDate) : null;
+  const end = bookingState.endDate ? new Date(bookingState.endDate) : null;
+  let nights = 0;
+  if (start && end) nights = Math.round((end - start) / (1000*60*60*24));
   ul.innerHTML = `
     <li><strong>Datum:</strong> ${bookingState.startDate} – ${bookingState.endDate}</li>
+    <li><strong>Počet nocí:</strong> ${nights}</li>
     <li><strong>Počet osob:</strong> ${bookingState.people}</li>
     <li><strong>Pokoje:</strong> ${bookingState.rooms.map(id => {
       const r = roomsData.find(r => r.id === id);
@@ -311,14 +356,12 @@ function calculateTotalPrice() {
 
 document.getElementById('to-step-2').onclick = async function() {
   const { start: startDate, end: endDate } = window.getSelectedDates ? window.getSelectedDates() : { start: null, end: null };
-  const people = parseInt(document.getElementById('people').value, 10);
-  if (!startDate || !endDate || !people || new Date(startDate) >= new Date(endDate)) {
-    alert('Vyberte platný termín a vyplňte všechna pole.');
+  if (!startDate || !endDate || new Date(startDate) >= new Date(endDate)) {
+    alert('Vyberte platný termín.');
     return;
   }
   bookingState.startDate = startDate;
   bookingState.endDate = endDate;
-  bookingState.people = people;
   await loadRooms();
   await loadBookings();
   await loadSeasons();
@@ -337,7 +380,7 @@ document.getElementById('to-step-3').onclick = function() {
     return;
   }
 
-  // Validate occupancy inputs exist and sum to total people
+  // Validate occupancy inputs exist and are >= 1
   let sum = 0;
   let missing = false;
   selectedRooms.forEach(id => {
@@ -346,16 +389,17 @@ document.getElementById('to-step-3').onclick = function() {
     if (!occEl || isNaN(val) || val < 1) missing = true;
     else sum += val;
   });
-
-  if (missing || sum !== bookingState.people) {
+  if (missing) {
     const el = document.getElementById('rooms-error');
-    if (el) { el.textContent = 'Přiřaďte prosím osoby do pokojů tak, aby součet odpovídal počtu osob.'; el.style.display = 'block'; }
+    if (el) { el.textContent = 'U každého vybraného pokoje vyplňte počet osob.'; el.style.display = 'block'; }
     return;
   }
 
   const elErr = document.getElementById('rooms-error');
   if (elErr) elErr.style.display = 'none';
   bookingState.rooms = [...selectedRooms];
+  // derive total people from per-room occupancy
+  bookingState.people = sum;
   // occupancy already stored in bookingState.occupancy
   renderServicesStep();
   showStep(2);
@@ -569,19 +613,88 @@ function renderServicesStep() {
       <div id="breakfast-people-row" style="display:none; margin-top:5px;">
         <label>
           Počet osob na snídani:
-          <input type="number" id="breakfast-people" min="1" max="${bookingState.people}" value="${bookingState.people}" style="width:60px;">
+          <input type="number" id="breakfast-people" min="1" max="${bookingState.people || 1}" value="${bookingState.breakfastPeople || bookingState.people || 1}" style="width:60px;">
         </label>
       </div>
     </div>
   `;
 
-  // Show/hide breakfast people input
+  // Add order summary for Step 3
+  let summaryEl = document.getElementById('order-summary-3');
+  if (!summaryEl) {
+    summaryEl = document.createElement('div');
+    summaryEl.id = 'order-summary-3';
+    container.appendChild(summaryEl);
+  }
+
+  // Attach listeners to service inputs so summary updates automatically
+  // Use a short timeout so elements exist in DOM
   setTimeout(() => {
+    // Per-room dog / extra-bed listeners
+    bookingState.rooms.forEach(roomId => {
+      const dogEl = document.getElementById(`dog-room-${roomId}`);
+      if (dogEl) {
+        // initialize from bookingState
+        dogEl.checked = bookingState.dogs.includes(roomId);
+        dogEl.addEventListener('change', () => {
+          if (dogEl.checked) {
+            if (!bookingState.dogs.includes(roomId)) bookingState.dogs.push(roomId);
+          } else {
+            bookingState.dogs = bookingState.dogs.filter(id => id !== roomId);
+          }
+          updateOrderSummary(3);
+        });
+      }
+
+      const extraEl = document.getElementById(`extra-bed-room-${roomId}`);
+      if (extraEl) {
+        extraEl.checked = bookingState.extraBeds.includes(roomId);
+        extraEl.addEventListener('change', () => {
+          if (extraEl.checked) {
+            if (!bookingState.extraBeds.includes(roomId)) bookingState.extraBeds.push(roomId);
+          } else {
+            bookingState.extraBeds = bookingState.extraBeds.filter(id => id !== roomId);
+          }
+          updateOrderSummary(3);
+        });
+      }
+    });
+
+    // Breakfast listeners
     const breakfastCheckbox = document.getElementById('breakfast-checkbox');
     const breakfastPeopleRow = document.getElementById('breakfast-people-row');
-    breakfastCheckbox.addEventListener('change', function() {
-      breakfastPeopleRow.style.display = this.checked ? 'block' : 'none';
-    });
+    const breakfastPeopleInput = document.getElementById('breakfast-people');
+
+    if (breakfastCheckbox) {
+      breakfastCheckbox.checked = !!bookingState.breakfast;
+      breakfastPeopleRow.style.display = bookingState.breakfast ? 'block' : 'none';
+      breakfastCheckbox.addEventListener('change', () => {
+        bookingState.breakfast = breakfastCheckbox.checked;
+        if (!bookingState.breakfast) {
+          bookingState.breakfastPeople = 0;
+        } else {
+          bookingState.breakfastPeople = parseInt(breakfastPeopleInput?.value || bookingState.people || 1, 10) || 1;
+        }
+        breakfastPeopleRow.style.display = breakfastCheckbox.checked ? 'block' : 'none';
+        updateOrderSummary(3);
+      });
+    }
+
+    if (breakfastPeopleInput) {
+      breakfastPeopleInput.value = bookingState.breakfastPeople || bookingState.people || 1;
+      breakfastPeopleInput.addEventListener('input', () => {
+        let v = parseInt(breakfastPeopleInput.value || '0', 10) || 1;
+        const max = parseInt(breakfastPeopleInput.max || bookingState.people || 1, 10);
+        if (v < 1) v = 1;
+        if (v > max) v = max;
+        breakfastPeopleInput.value = String(v);
+        bookingState.breakfastPeople = v;
+        updateOrderSummary(3);
+      });
+    }
+
+    // Initial summary render
+    updateOrderSummary(3);
   }, 0);
 }
 

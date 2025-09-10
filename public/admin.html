@@ -318,12 +318,9 @@
         <button id="next-month" class="button-icon" title="Další měsíc">&gt;</button>
       </div>
 
-      <!-- calendar table (script.js will populate thead and tbody) -->
+      <!-- half-day (morning/afternoon) calendar container -->
       <div id="calendar-container">
-        <table id="calendar" aria-hidden="false">
-          <thead></thead>
-          <tbody id="calendar-body"></tbody>
-        </table>
+        <div id="half-calendar-container"></div>
       </div>
       <div id="selected-dates" style="margin-top:8px; text-align:center; color:#333;"></div>
     </div>
@@ -439,6 +436,7 @@
         <p><strong>Telefon:</strong> ${booking.phone}</p>
       `;
 
+      // actions container
       const actions = document.createElement('div');
       actions.className = 'actions';
 
@@ -462,6 +460,15 @@
         cancelBtn.onclick = () => handleCancel(booking.id, isCommon);
         actions.appendChild(cancelBtn);
       }
+
+      // NEW: Receipt button (Účet) - always available
+      const receiptBtn = document.createElement('button');
+      receiptBtn.className = 'btn';
+      receiptBtn.style.background = '#1976d2';
+      receiptBtn.style.border = 'none';
+      receiptBtn.textContent = 'Účet';
+      receiptBtn.onclick = () => showReceipt(booking, isCommon);
+      actions.appendChild(receiptBtn);
 
       card.appendChild(actions);
 
@@ -718,6 +725,211 @@
       const room = commonRoomsList.find(r => r.id === id);
       return room ? room.name : "Neznámá místnost";
     }
+
+    async function showReceipt(booking, isCommon) {
+  // fetch seasons so we can compute season-adjusted nightly prices per room
+  let seasonsData = [];
+  try {
+    const sres = await fetch('/api/seasons');
+    if (sres.ok) seasonsData = await sres.json();
+  } catch (e) { seasonsData = []; }
+
+  const getRoom = id => roomsList.find(r => String(r.id) === String(id)) || { name: `Pokoj ${id}`, price: 0, dogFee: 0, extraBedFee: 0 };
+  const getCommon = id => commonRoomsList.find(r => r.id === Number(id)) || { name: `Společná ${id}`, capacity: 0 };
+
+  const start = new Date(booking.start || booking.startDate);
+  const end = new Date(booking.end || booking.endDate);
+  start.setHours(0,0,0,0);
+  end.setHours(0,0,0,0);
+  const nights = Math.max(0, Math.round((end - start) / (1000*60*60*24)));
+
+  // helper: compute room total with season adjustments (same logic as booking-wizard)
+  function computeRoomPriceWithSeasons(room, startDate, endDate, seasons) {
+    const nightsCount = Math.max(0, Math.round((endDate - startDate) / (1000*60*60*24)));
+    let total = 0;
+    for (let i = 0; i < nightsCount; i++) {
+      const day = new Date(startDate);
+      day.setDate(day.getDate() + i);
+      day.setHours(0,0,0,0);
+      let percent = 0, flat = 0;
+      seasons.forEach(season => {
+        const s = new Date(season.start);
+        const e = new Date(season.end);
+        s.setHours(0,0,0,0); e.setHours(0,0,0,0);
+        if (day >= s && day < e) {
+          if (season.type === 'percent') percent += Number(season.value || 0);
+          else if (season.type === 'flat') flat += Number(season.value || 0);
+        }
+      });
+      const base = Number(room.price || 0);
+      const nightPrice = base * (1 + percent / 100) + flat;
+      total += nightPrice;
+    }
+    return Math.round(total);
+  }
+
+  let lines = [];
+  let subtotal = 0;
+
+  (booking.rooms || []).forEach(rid => {
+    if (isCommon) {
+      const cm = getCommon(rid);
+      const label = `${cm.name} (společná místnost) x ${nights} nocí`;
+      const amount = 0;
+      lines.push({ label, amount });
+      subtotal += amount;
+    } else {
+      const room = getRoom(rid);
+      const roomTotal = computeRoomPriceWithSeasons(room, start, end, seasonsData);
+      lines.push({ label: `${room.name} - pokoj x ${nights} nocí`, amount: roomTotal });
+      subtotal += roomTotal;
+
+      if (Array.isArray(booking.dogs) && booking.dogs.map(String).includes(String(rid))) {
+        const dogFee = Number(room.dogFee || 0);
+        lines.push({ label: `${room.name} - pes (poplatek)`, amount: dogFee });
+        subtotal += dogFee;
+      }
+
+      if (Array.isArray(booking.extraBeds) && booking.extraBeds.map(String).includes(String(rid))) {
+        const ebFee = Number(room.extraBedFee || 0);
+        const ebTotal = ebFee * nights;
+        lines.push({ label: `${room.name} - přistýlka (${ebFee} Kč / noc) x ${nights}`, amount: ebTotal });
+        subtotal += ebTotal;
+      }
+    }
+  });
+
+  if (booking.breakfast || booking.breakfastPeople) {
+    const peopleForBreakfast = Number(booking.breakfastPeople || booking.people || 0);
+    const breakfastPer = 150;
+    const breakfastTotal = peopleForBreakfast * breakfastPer * nights;
+    lines.push({ label: `Snídaně (${peopleForBreakfast} osob x ${breakfastPer} Kč / os. / noc) x ${nights}`, amount: breakfastTotal });
+    subtotal += breakfastTotal;
+  }
+
+  const serverTotal = booking.totalPrice != null ? Number(booking.totalPrice) : null;
+  const total = serverTotal !== null ? serverTotal : subtotal;
+
+  const fullHtml = `
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Účet - rezervace ${booking.name || booking.id}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding:20px; color:#111; }
+        h1 { font-size:18px; margin-bottom:6px; }
+        .meta { margin-bottom:12px; }
+        table { width:100%; border-collapse:collapse; margin-top:8px; }
+        th, td { padding:8px 6px; border-bottom:1px solid #eee; text-align:left; }
+        th { background:#fafafa; }
+        .amount { text-align:right; white-space:nowrap; }
+        .total-row td { font-weight:700; border-top:2px solid #222; }
+        .note { margin-top:12px; font-size:0.95rem; color:#444; }
+        @media print { .no-print { display:none; } }
+      </style>
+    </head>
+    <body>
+      <h1>Účet za rezervaci</h1>
+      <div class="meta">
+        <div><strong>Jméno:</strong> ${booking.name || '-'}</div>
+        <div><strong>Datum:</strong> ${booking.start || booking.startDate} – ${booking.end || booking.endDate}</div>
+        <div><strong>Počet nocí:</strong> ${nights}</div>
+        <div><strong>Počet osob:</strong> ${booking.people || '-'}</div>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th>Položka</th><th class="amount">Cena (Kč)</th></tr>
+        </thead>
+        <tbody>
+          ${lines.map(l => `<tr><td>${l.label}</td><td class="amount">${Math.round(l.amount)}</td></tr>`).join('')}
+          <tr class="total-row"><td>Celkem</td><td class="amount">${Math.round(total)}</td></tr>
+        </tbody>
+      </table>
+
+      ${serverTotal !== null ? `<div class="note">Poznámka: Celková cena nahlášená serverem: ${serverTotal} Kč. Pokud se liší, zkontrolujte slevy nebo sezónní úpravy.</div>` : ''}
+      <div style="margin-top:18px;">
+        <button onclick="window.print()" class="no-print" style="padding:8px 12px; background:#1976d2; color:#fff; border:none; border-radius:4px; cursor:pointer;">Tisk</button>
+        <button onclick="window.close()" class="no-print" style="padding:8px 12px; margin-left:8px; background:#f0f0f0; border:none; border-radius:4px; cursor:pointer;">Zavřít</button>
+      </div>
+    </body>
+    </html>
+  `;
+
+  // Try to open a new tab/window first
+  let w;
+  try {
+    w = window.open('', '_blank');
+    if (w) {
+      try { w.opener = null; } catch (e) {}
+      w.document.open();
+      w.document.write(fullHtml);
+      w.document.close();
+      w.focus && w.focus();
+      return;
+    }
+  } catch (e) {
+    w = null;
+  }
+
+  // Fallback: create an in-page modal with an iframe and write the receipt into it
+  const modalId = 'receipt-modal';
+  const existing = document.getElementById(modalId);
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = modalId;
+  Object.assign(modal.style, {
+    position: 'fixed', left: 0, top: 0, right: 0, bottom: 0,
+    background: 'rgba(0,0,0,0.6)', zIndex: 99999, display: 'flex',
+    alignItems: 'center', justifyContent: 'center', padding: '20px'
+  });
+
+  const frameWrap = document.createElement('div');
+  Object.assign(frameWrap.style, { width: '100%', maxWidth: '900px', height: '80vh', background: '#fff', borderRadius: '6px', overflow: 'hidden', display:'flex', flexDirection:'column' });
+
+  const toolbar = document.createElement('div');
+  Object.assign(toolbar.style, { padding: '8px', background:'#fafafa', borderBottom: '1px solid #eee', display:'flex', gap:'8px', justifyContent:'flex-end' });
+
+  const printBtn = document.createElement('button');
+  printBtn.textContent = 'Tisk';
+  Object.assign(printBtn.style, { padding:'6px 10px', background:'#1976d2', color:'#fff', border:'none', borderRadius:'4px', cursor:'pointer' });
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Zavřít';
+  Object.assign(closeBtn.style, { padding:'6px 10px', background:'#f0f0f0', border:'none', borderRadius:'4px', cursor:'pointer' });
+
+  toolbar.appendChild(printBtn);
+  toolbar.appendChild(closeBtn);
+
+  const iframe = document.createElement('iframe');
+  iframe.style.border = '0';
+  iframe.style.flex = '1 1 auto';
+  iframe.style.width = '100%';
+  iframe.style.height = '100%';
+
+  frameWrap.appendChild(toolbar);
+  frameWrap.appendChild(iframe);
+  modal.appendChild(frameWrap);
+  document.body.appendChild(modal);
+
+  try {
+    const idoc = iframe.contentWindow.document;
+    idoc.open();
+    idoc.write(fullHtml);
+    idoc.close();
+  } catch (e) {
+    const fallback = document.createElement('div');
+    fallback.style.padding = '20px';
+    fallback.innerText = 'Nelze zobrazit náhled účtu v rámci stránky.';
+    frameWrap.appendChild(fallback);
+  }
+
+  printBtn.onclick = function() {
+    try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch (e) { window.print(); }
+  };
+  closeBtn.onclick = function() { modal.remove(); };
+}
 
     async function updateCurrentClients() {
       const res = await fetch('/api/bookings/confirmed');
