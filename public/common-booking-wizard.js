@@ -77,16 +77,78 @@ function renderRoomCheckboxes() {
   }
 }
 
+// helper: map percent -> occupancy class (reuse same buckets)
+function occupancyClass(p) {
+  if (p === 0) return 'occ-0';
+  if (p > 0 && p <= 30) return 'occ-1-30';
+  if (p > 30 && p <= 60) return 'occ-31-60';
+  if (p > 60 && p < 100) return 'occ-61-99';
+  return 'occ-100';
+}
+
+// NEW helper: inline colors fallback
+function occupancyColors(p){
+  if (p === 0) return { bg:'#2ecc71', color:'#ffffff' };
+  if (p > 0 && p <= 30) return { bg:'#fff8c2', color:'#111111' };
+  if (p > 30 && p <= 60) return { bg:'#f1c40f', color:'#111111' };
+  if (p > 60 && p < 100) return { bg:'#e67e22', color:'#ffffff' };
+  return { bg:'#e74c3c', color:'#ffffff' };
+}
+
+// helper: does booking cover the night D (S <= D < E)
+function bookingCoversNight(booking, D) {
+  const rawS = booking.start || booking.startDate || booking.startDateTime;
+  const rawE = booking.end || booking.endDate || booking.endDateTime;
+  if (!rawS || !rawE) return false;
+  const S = new Date(rawS); S.setHours(0,0,0,0);
+  const E = new Date(rawE); E.setHours(0,0,0,0);
+  return S.getTime() <= D.getTime() && E.getTime() > D.getTime();
+}
+
 // calendar rendering (simple)
-function renderCalendar() {
+async function renderCalendar() {
   const monthEl = document.getElementById('cal-month');
   const grid = document.getElementById('cal-grid');
   grid.innerHTML = '';
   const year = calDate.getFullYear();
   const month = calDate.getMonth();
 
+  // fetch confirmed common bookings to compute occupancy
+  let confirmedCommon = [];
+  try {
+    const res = await fetch('/api/common-bookings/confirmed');
+    confirmedCommon = await res.json().catch(()=>[]);
+  } catch (e) {
+    confirmedCommon = [];
+  }
+
   const monthName = calDate.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
   monthEl.textContent = monthName;
+
+  // helper to show/hide warning near the date input
+  function showDateWarning(msg) {
+    const dateEl = document.getElementById('date');
+    if (!dateEl) return;
+    let w = document.getElementById('date-warning-common');
+    if (!w) {
+      w = document.createElement('div');
+      w.id = 'date-warning-common';
+      w.style.marginTop = '8px';
+      w.style.padding = '8px';
+      w.style.borderRadius = '6px';
+      w.style.background = '#ffe6e6';
+      w.style.color = '#7a0000';
+      w.style.fontWeight = '600';
+      w.style.border = '1px solid #ff9b9b';
+      dateEl.parentNode.insertBefore(w, dateEl.nextSibling);
+    }
+    w.textContent = msg;
+    w.style.display = 'block';
+  }
+  function hideDateWarning() {
+    const w = document.getElementById('date-warning-common');
+    if (w) w.style.display = 'none';
+  }
 
   const dayNames = ['Po','Út','St','Čt','Pá','So','Ne'];
   dayNames.forEach(d => {
@@ -109,6 +171,11 @@ function renderCalendar() {
   }
 
   const today = new Date(); today.setHours(0,0,0,0);
+
+  // visible common rooms respecting showInCalendar
+  const visibleCommon = (commonRooms || []).filter(r => typeof r.showInCalendar === 'undefined' ? true : Boolean(r.showInCalendar));
+  const totalCommonCount = visibleCommon.length;
+
   for (let d=1; d<=daysInMonth; d++) {
     const dt = new Date(year, month, d);
     dt.setHours(0,0,0,0);
@@ -125,15 +192,66 @@ function renderCalendar() {
     const selected = document.getElementById('date').value;
     if (selected === iso) cell.classList.add('selected');
 
+    // compute occupancy percent for common rooms on this date (confirmed only)
+    let bookedCommonCount = 0;
+    if (totalCommonCount > 0) {
+      visibleCommon.forEach(c => {
+        const isBooked = (confirmedCommon || []).some(b => {
+          if (!(b.rooms || []).includes(c.id) && !(b.rooms || []).includes(String(c.id))) return false;
+          return bookingCoversNight(b, dt);
+        });
+        if (isBooked) bookedCommonCount++;
+      });
+    }
+    const percent = totalCommonCount ? Math.min(100, Math.round((bookedCommonCount / totalCommonCount) * 100)) : 0;
+
+    // attach percent to DOM for later checks and apply class/colors
+    cell.dataset.percent = String(percent);
+    cell.classList.remove('occ-0','occ-1-30','occ-31-60','occ-61-99','occ-100');
+    cell.classList.add(occupancyClass(percent));
+    const col = (function(p){
+      if (p === 0) return { bg:'#2ecc71', color:'#fff' };
+      if (p > 0 && p <= 30) return { bg:'#fff8c2', color:'#111' };
+      if (p > 30 && p <= 60) return { bg:'#f1c40f', color:'#111' };
+      if (p > 60 && p < 100) return { bg:'#e67e22', color:'#fff' };
+      return { bg:'#e74c3c', color:'#fff' };
+    })(percent);
+    cell.style.background = col.bg;
+    cell.style.color = col.color;
+
     cell.addEventListener('click', () => {
       document.getElementById('date').value = iso;
       selectedDate = iso;
       // refresh selected visuals
       grid.querySelectorAll('.cal-day.selected').forEach(x => x.classList.remove('selected'));
       cell.classList.add('selected');
+
+      // Show warning immediately if this date is fully booked
+      if (Number(cell.dataset.percent) === 100) {
+        showDateWarning('Jejda! V tohle datum je už chata plná. Zkuste prosím jiné datum.');
+      } else {
+        hideDateWarning();
+      }
     });
 
     grid.appendChild(cell);
+  }
+
+  // After building the calendar, if a date is already selected (e.g. from input), show/hide warning accordingly
+  const sel = document.getElementById('date').value;
+  if (sel) {
+    const selectedCell = grid.querySelector(`.cal-day[data-date="${sel}"]`);
+    if (selectedCell) {
+      if (Number(selectedCell.dataset.percent) === 100) {
+        showDateWarning('Jejda! V tohle datum je už chata plná. Zkuste prosím jiné datum.');
+      } else {
+        hideDateWarning();
+      }
+    } else {
+      hideDateWarning();
+    }
+  } else {
+    hideDateWarning();
   }
 }
 

@@ -3,16 +3,16 @@ const app = express();
 const fs = require('fs');
 const path = require('path');
 const nodemailer = require('nodemailer');
-const bodyParser = require('body-parser');
 const config = require('./config.json');
 const multer = require('multer');
 const upload = multer({ dest: 'public/images/rooms/' });
 const cookieParser = require('cookie-parser');
 const PORT = process.env.PORT || 3000;
 
+// replace bodyParser with built-in express parsers
 app.use(cookieParser());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // 📂 Serve static admin files (css, js)
 app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
@@ -91,28 +91,48 @@ app.get('/api/bookings', (req, res) => {
 });
 
 app.post('/api/bookings', (req, res) => {
-  // ...validation...
-  const pendingBookings = JSON.parse(fs.readFileSync('./data/pending-bookings.json'));
-  const booking = {
-    startDate: req.body.startDate,
-    endDate: req.body.endDate,
-    rooms: req.body.rooms,
-    people: req.body.people,
-    dogs: req.body.dogs,
-    extraBeds: req.body.extraBeds,
-    breakfast: req.body.breakfast,
-    breakfastPeople: req.body.breakfastPeople,
-    name: req.body.name,
-    email: req.body.email,
-    phone: req.body.phone,
-    totalPrice: req.body.totalPrice,
-    occupancy: req.body.occupancy, 
-    createdAt: new Date().toISOString(),
-    id: Date.now()
-  };
-  pendingBookings.push(booking);
-  fs.writeFileSync('./data/pending-bookings.json', JSON.stringify(pendingBookings, null, 2));
-  res.json({ success: true });
+  try {
+    // basic validation
+    const { startDate, endDate, rooms, people, name, email } = req.body || {};
+    if (!startDate || !endDate || !Array.isArray(rooms) || rooms.length === 0 || !name || !email) {
+      return res.status(400).json({ success: false, message: 'Neplatná data rezervace.' });
+    }
+
+    const pendingPath = path.join(__dirname, 'data', 'pending-bookings.json');
+    const pending = fs.existsSync(pendingPath) ? JSON.parse(fs.readFileSync(pendingPath, 'utf8')) : [];
+
+    const booking = {
+      id: Date.now(),
+      startDate,
+      endDate,
+      rooms: rooms.map(Number),
+      people: Number(people) || 0,
+      name: name || '',
+      email: email || '',
+      phone: req.body.phone || '',
+      createdAt: new Date().toISOString(),
+      // service fields
+      dogs: Array.isArray(req.body.dogs) ? req.body.dogs.map(Number) : [],
+      extraBeds: Array.isArray(req.body.extraBeds) ? req.body.extraBeds.map(Number) : [],
+      cots: Array.isArray(req.body.cots) ? req.body.cots.map(Number) : [],
+      bikes: Array.isArray(req.body.bikes) ? req.body.bikes.map(Number) : [],
+      breakfast: !!req.body.breakfast,
+      breakfastPeople: Number(req.body.breakfastPeople || 0),
+      totalPrice: Number(req.body.totalPrice || 0),
+      occupancy: req.body.occupancy || {}
+    };
+
+    pending.push(booking);
+    fs.writeFileSync(pendingPath, JSON.stringify(pending, null, 2));
+
+    // notify admin/customer that booking is pending (optional)
+    try { notifyBookingStatus(booking, 'pending', false); } catch (e) { /* ignore */ }
+
+    res.json({ success: true, id: booking.id });
+  } catch (err) {
+    console.error('POST /api/bookings error', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
 });
 
 
@@ -177,6 +197,9 @@ app.post('/api/bookings/:id/accept', (req, res) => {
     fs.writeFileSync(confirmedFile, JSON.stringify(confirmed, null, 2));
     fs.writeFileSync(archiveFile, JSON.stringify(archive, null, 2));
 
+    // send notifications
+    try { notifyBookingStatus(booking, 'accepted', false); } catch (e) { console.error(e); }
+
     res.json({ success: true, message: 'Rezervace potvrzena.' });
 });
 
@@ -193,8 +216,13 @@ app.post('/api/bookings/:id/reject', (req, res) => {
         return res.status(404).json({ success: false, message: 'Rezervace nenalezena.' });
     }
 
+    const booking = pending[bookingIndex];
+
     pending.splice(bookingIndex, 1);
     fs.writeFileSync(pendingFile, JSON.stringify(pending, null, 2));
+
+    // send notifications
+    try { notifyBookingStatus(booking, 'rejected', false); } catch (e) { console.error(e); }
 
     res.json({ success: true, message: 'Rezervace zamítnuta.' });
 });
@@ -269,7 +297,6 @@ pending.push(newBooking);
 });
 
 
-// Accept pending common booking
 app.post('/api/common-bookings/:id/accept', (req, res) => {
     removeExpiredPendingBookings();
     const bookingId = parseInt(req.params.id);
@@ -292,6 +319,9 @@ app.post('/api/common-bookings/:id/accept', (req, res) => {
     fs.writeFileSync('./data/confirmed-common-bookings.json', JSON.stringify(confirmed, null, 2));
     fs.writeFileSync(archiveFile, JSON.stringify(archive, null, 2));
 
+    // send notifications
+    try { notifyBookingStatus(booking, 'accepted', true); } catch (e) { console.error(e); }
+
     res.json({ success: true, message: "Rezervace byla potvrzena." });
 });
 
@@ -306,8 +336,13 @@ app.post('/api/common-bookings/:id/reject', (req, res) => {
         return res.status(404).json({ success: false, message: "Rezervace nenalezena." });
     }
 
+    const booking = pending[index];
+
     pending.splice(index, 1);
     fs.writeFileSync('./data/pending-common-bookings.json', JSON.stringify(pending, null, 2));
+
+    // send notifications
+    try { notifyBookingStatus(booking, 'rejected', true); } catch (e) { console.error(e); }
 
     res.json({ success: true, message: "Rezervace byla zamítnuta." });
 });
@@ -401,12 +436,14 @@ app.post('/api/block-all', (req, res) => {
 
 // Update room details
 app.post('/api/rooms/update', upload.array('photos', 10), (req, res) => {
-    const { id, price, beds, dogAllowed, dogFee, extraBedAllowed, extraBedFee, description } = req.body;
+    const { id, name, price, beds, dogAllowed, dogFee, extraBedAllowed, extraBedFee, description, bookable } = req.body;
     const rooms = JSON.parse(fs.readFileSync('./data/rooms.json'));
     const roomIndex = rooms.findIndex(r => r.id == id);
     if (roomIndex === -1) {
         return res.status(404).json({ success: false, message: "Pokoj nenalezen." });
     }
+    // save provided fields
+    if (typeof name !== 'undefined') rooms[roomIndex].name = String(name);
     rooms[roomIndex].price = Number.isFinite(Number(price)) ? parseInt(price, 10) : rooms[roomIndex].price;
     rooms[roomIndex].beds = Number.isFinite(Number(beds)) ? parseInt(beds, 10) : rooms[roomIndex].beds;
 
@@ -416,11 +453,29 @@ app.post('/api/rooms/update', upload.array('photos', 10), (req, res) => {
     }
  
      // Save dog/extra bed values
-     rooms[roomIndex].dogAllowed = dogAllowed === 'true' || dogAllowed === true;
-     rooms[roomIndex].dogFee = parseInt(dogFee) || 0;
-     rooms[roomIndex].extraBedAllowed = extraBedAllowed === 'true' || extraBedAllowed === true;
-     rooms[roomIndex].extraBedFee = parseInt(extraBedFee) || 0;
- 
+     rooms[roomIndex].dogAllowed = (rooms[roomIndex].dogFee || -1) >= 0;
+     rooms[roomIndex].extraBedAllowed = (rooms[roomIndex].extraBedFee || -1) >= 0;
+
+     // Save bookable flag
+     if (typeof bookable !== 'undefined') {
+       rooms[roomIndex].bookable = (bookable === 'true' || bookable === true);
+     }
+     // Save showInCalendar flag
+     if (typeof req.body.showInCalendar !== 'undefined') {
+       rooms[roomIndex].showInCalendar = (req.body.showInCalendar === 'true' || req.body.showInCalendar === true);
+     }
+    // Service fees: -1 means disabled
+    if (typeof req.body.dogFee !== 'undefined') rooms[roomIndex].dogFee = parseInt(req.body.dogFee, 10);
+    if (typeof req.body.extraBedFee !== 'undefined') rooms[roomIndex].extraBedFee = parseInt(req.body.extraBedFee, 10);
+    if (typeof req.body.cotFee !== 'undefined') rooms[roomIndex].cotFee = parseInt(req.body.cotFee, 10);
+    if (typeof req.body.bikeFee !== 'undefined') rooms[roomIndex].bikeFee = parseInt(req.body.bikeFee, 10);
+    // Group assignment
+    if (typeof req.body.group !== 'undefined') {
+      // form may send group as repeated fields resulting in array; normalize to single string
+      const g = Array.isArray(req.body.group) ? (req.body.group[0] || '') : req.body.group;
+      rooms[roomIndex].group = String(g);
+    }
+  
      // Handle multiple photos
      if (req.files && req.files.length > 0) {
          rooms[roomIndex].photos = rooms[roomIndex].photos || [];
@@ -430,37 +485,71 @@ app.post('/api/rooms/update', upload.array('photos', 10), (req, res) => {
              }
          });
      }
- 
+  
      fs.writeFileSync('./data/rooms.json', JSON.stringify(rooms, null, 2));
      res.json({ success: true });
  });
 
-// Get all bookings (confirmed + pending)
-app.get('/api/bookings/all', (req, res) => {
-    removeExpiredPendingBookings();
-    // Room bookings
-    const confirmed = JSON.parse(fs.readFileSync('./data/confirmed-bookings.json'));
-    const pending = JSON.parse(fs.readFileSync('./data/pending-bookings.json'));
-
-    // Common room bookings
-    const confirmedCommon = JSON.parse(fs.readFileSync('./data/confirmed-common-bookings.json'));
-    const pendingCommon = JSON.parse(fs.readFileSync('./data/pending-common-bookings.json'));
-
-    // Add status and type to each booking
-    const confirmedWithStatus = confirmed.map(b => ({ ...b, status: 'confirmed', type: 'room' }));
-    const pendingWithStatus = pending.map(b => ({ ...b, status: 'pending', type: 'room' }));
-
-    const confirmedCommonWithStatus = confirmedCommon.map(b => ({ ...b, status: 'confirmed', type: 'common' }));
-    const pendingCommonWithStatus = pendingCommon.map(b => ({ ...b, status: 'pending', type: 'common' }));
-
-    // Combine all
-    res.json([
-        ...confirmedWithStatus,
-        ...pendingWithStatus,
-        ...confirmedCommonWithStatus,
-        ...pendingCommonWithStatus
-    ]);
+// Return only rooms that are bookable for the booking wizard
+app.get('/api/rooms/bookable', (req, res) => {
+  const rooms = JSON.parse(fs.readFileSync('./data/rooms.json'));
+  const bookable = rooms.filter(r => typeof r.bookable === 'undefined' ? true : Boolean(r.bookable));
+  res.json(bookable);
 });
+ 
+ // Delete a photo from a room's album (remove reference and delete file)
+app.post('/api/rooms/:id/photos/delete', (req, res) => {
+  try {
+    const roomId = Number(req.params.id);
+    const filename = req.body && req.body.filename;
+    if (!filename) return res.status(400).json({ success: false, message: 'Chybí název souboru.' });
+
+    const roomsPath = path.join(__dirname, 'data', 'rooms.json');
+    const rooms = readJsonFileSafe(roomsPath);
+    const idx = rooms.findIndex(r => Number(r.id) === roomId);
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Pokoj nenalezen.' });
+
+    rooms[idx].photos = (rooms[idx].photos || []).filter(f => f !== filename);
+    fs.writeFileSync(roomsPath, JSON.stringify(rooms, null, 2));
+
+    const filePath = path.join(__dirname, 'public', 'images', 'rooms', filename);
+    if (fs.existsSync(filePath)) {
+      try { fs.unlinkSync(filePath); } catch (e) { console.error('Failed to delete file', filePath, e); }
+    }
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Error deleting room photo', e);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+ 
+ // Get all bookings (confirmed + pending)
+ app.get('/api/bookings/all', (req, res) => {
+     removeExpiredPendingBookings();
+     // Room bookings
+     const confirmed = JSON.parse(fs.readFileSync('./data/confirmed-bookings.json'));
+     const pending = JSON.parse(fs.readFileSync('./data/pending-bookings.json'));
+
+     // Common room bookings
+     const confirmedCommon = JSON.parse(fs.readFileSync('./data/confirmed-common-bookings.json'));
+     const pendingCommon = JSON.parse(fs.readFileSync('./data/pending-common-bookings.json'));
+
+     // Add status and type to each booking
+     const confirmedWithStatus = confirmed.map(b => ({ ...b, status: 'confirmed', type: 'room' }));
+     const pendingWithStatus = pending.map(b => ({ ...b, status: 'pending', type: 'room' }));
+
+     const confirmedCommonWithStatus = confirmedCommon.map(b => ({ ...b, status: 'confirmed', type: 'common' }));
+     const pendingCommonWithStatus = pendingCommon.map(b => ({ ...b, status: 'pending', type: 'common' }));
+
+     // Combine all
+     res.json([
+         ...confirmedWithStatus,
+         ...pendingWithStatus,
+         ...confirmedCommonWithStatus,
+         ...pendingCommonWithStatus
+     ]);
+ });
 
 // Get all seasons
 app.get('/api/seasons', (req, res) => {
@@ -490,6 +579,65 @@ app.delete('/api/seasons/:id', (req, res) => {
     fs.writeFileSync(file, JSON.stringify(seasons, null, 2));
     res.json({ success: true });
 });
+
+// create transporter if SMTP configured in config.json
+const transporter = (config.smtp && Object.keys(config.smtp).length)
+  ? nodemailer.createTransport(config.smtp)
+  : null;
+
+function sendEmail(to, subject, text, html) {
+  if (!to) return Promise.resolve();
+  if (!transporter) {
+    console.log('SMTP not configured — skipping email to:', to, subject);
+    return Promise.resolve();
+  }
+  const from = config.emailFrom || config.adminEmail || 'no-reply@cottage.local';
+  const mail = { from, to, subject, text, html };
+  return transporter.sendMail(mail).catch(err => {
+    console.error('sendEmail error', err);
+  });
+}
+
+function formatBookingSummary(booking, isCommon) {
+  const start = booking.startDate || booking.start || '';
+  const end = booking.endDate || booking.end || '';
+  const rooms = (booking.rooms || []).join(', ');
+  return `Rezervace ID: ${booking.id}
+Jméno: ${booking.name || '-'}
+Email: ${booking.email || '-'}
+Telefon: ${booking.phone || '-'}
+Typ: ${isCommon ? 'Společný prostor' : 'Pokoj(y)'}
+Místnosti: ${rooms}
+Datum: ${start} – ${end}
+Počet osob: ${booking.people || 0}
+`;
+}
+
+function notifyBookingStatus(booking, status, isCommon) {
+  const adminEmail = config.adminEmail || 'admin@cottage.local';
+  const subj = status === 'accepted'
+    ? `Rezervace potvrzena #${booking.id}`
+    : `Rezervace zamítnuta #${booking.id}`;
+
+  const customerText = (status === 'accepted')
+    ? `Dobrý den ${booking.name || ''},
+
+Vaše rezervace byla potvrzena.
+
+` + formatBookingSummary(booking, isCommon)
+    : `Dobrý den ${booking.name || ''},
+
+Omlouváme se, ale Vaše rezervace byla bohužel zamítnuta.
+
+` + formatBookingSummary(booking, isCommon);
+
+  const adminText = `ADMIN - Rezervace ${status.toUpperCase()}:
+` + formatBookingSummary(booking, isCommon);
+
+  // fire-and-forget
+  sendEmail(booking.email, subj, customerText, `<pre>${customerText}</pre>`).catch(()=>{});
+  sendEmail(adminEmail, subj, adminText, `<pre>${adminText}</pre>`).catch(()=>{});
+}
 
 // Function to remove expired pending bookings
 function removeExpiredPendingBookings() {
@@ -559,4 +707,35 @@ app.listen(PORT, () => {
 // Config route
 app.get('/api/config', (req, res) => {
     res.json({ pendingTimeoutMinutes: config.pendingTimeoutMinutes });
+});
+
+// Bulk update rooms by group
+app.post('/api/rooms/bulk-update', (req, res) => {
+  try {
+    const updates = Array.isArray(req.body.updates) ? req.body.updates : [];
+    if (!updates.length) return res.status(400).json({ success: false, message: 'No updates provided.' });
+
+    const roomsPath = path.join(__dirname, 'data', 'rooms.json');
+    const rooms = readJsonFileSafe(roomsPath);
+
+    // apply updates
+    updates.forEach(u => {
+      const groupName = String(u.group || '');
+      const bookable = typeof u.bookable !== 'undefined' ? !!u.bookable : undefined;
+      const showInCalendar = typeof u.showInCalendar !== 'undefined' ? !!u.showInCalendar : undefined;
+
+      rooms.forEach(r => {
+        if (String(r.group || '') === groupName) {
+          if (typeof bookable !== 'undefined') r.bookable = bookable;
+          if (typeof showInCalendar !== 'undefined') r.showInCalendar = showInCalendar;
+        }
+      });
+    });
+
+    fs.writeFileSync(roomsPath, JSON.stringify(rooms, null, 2));
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Bulk update error', e);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
 });

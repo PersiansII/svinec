@@ -14,6 +14,8 @@ let bookingState = {
   phone: "",
   dogs: [],
   extraBeds: [],
+  cots: [],
+  bikes: [],
   occupancy: {} // <-- per-room occupancy { roomId: count }
 };
 let galleryPhotos = [];
@@ -83,7 +85,7 @@ function updateOrderSummary(stepNumber) {
 }
 
 async function loadRooms() {
-  const res = await fetch('/api/rooms');
+  const res = await fetch('/api/rooms/bookable');
   roomsData = await res.json();
 }
 async function loadBookings() {
@@ -325,6 +327,16 @@ function renderSummary() {
           return r ? `${r.name} přistýlka` : '';
         })
       ).concat(
+        bookingState.cots.map(id => {
+          const r = roomsData.find(r => r.id === id);
+          return r ? `${r.name} postýlka` : '';
+        })
+      ).concat(
+        bookingState.bikes.map(id => {
+          const r = roomsData.find(r => r.id === id);
+          return r ? `${r.name} uložení kol` : '';
+        })
+      ).concat(
         bookingState.breakfast ? [`Snídaně pro ${bookingState.breakfastPeople} osob`] : []
       ).join(', ')
     }</li>
@@ -338,18 +350,32 @@ function calculateTotalPrice() {
     const room = roomsData.find(r => r.id === id);
     if (room) total += getRoomPrice(room, bookingState.startDate, bookingState.endDate);
   });
+  // extra services (per-room)
   bookingState.dogs.forEach(id => {
     const room = roomsData.find(r => r.id === id);
-    if (room) total += room.dogFee;
+    if (room && typeof room.dogFee !== 'undefined' && Number(room.dogFee) >= 0) total += Number(room.dogFee);
   });
   bookingState.extraBeds.forEach(id => {
     const room = roomsData.find(r => r.id === id);
-    if (room) total += room.extraBedFee;
+    if (room && typeof room.extraBedFee !== 'undefined' && Number(room.extraBedFee) >= 0) total += Number(room.extraBedFee) * ((new Date(bookingState.endDate) - new Date(bookingState.startDate)) / (1000*60*60*24));
   });
+  // cots and bike storage are one-time fees
+  bookingState.cots.forEach(id => {
+    const room = roomsData.find(r => r.id === id);
+    if (room && typeof room.cotFee !== 'undefined' && Number(room.cotFee) >= 0) total += Number(room.cotFee);
+  });
+  bookingState.bikes.forEach(id => {
+    const room = roomsData.find(r => r.id === id);
+    if (room && typeof room.bikeFee !== 'undefined' && Number(room.bikeFee) >= 0) total += Number(room.bikeFee);
+  });
+
+  // Breakfast: 150 Kč per person per night
   if (bookingState.breakfast) {
-    const nights = (new Date(bookingState.endDate) - new Date(bookingState.startDate)) / (1000 * 60 * 60 * 24);
-    total += bookingState.breakfastPeople * nights * 150;
+    const nights = Math.max(0, Math.round((new Date(bookingState.endDate) - new Date(bookingState.startDate)) / (1000*60*60*24)));
+    const peopleForBreakfast = Number(bookingState.breakfastPeople || bookingState.people || 0);
+    total += peopleForBreakfast * nights * 150;
   }
+
   bookingState.totalPrice = Math.round(total); // <-- Store in bookingState
   return bookingState.totalPrice;
 }
@@ -413,6 +439,8 @@ document.getElementById('to-step-4').onclick = function() {
   // Collect per-room services and occupancy
   bookingState.dogs = [];
   bookingState.extraBeds = [];
+  bookingState.cots = [];
+  bookingState.bikes = [];
   bookingState.breakfast = false;
   bookingState.breakfastPeople = 0;
 
@@ -438,6 +466,12 @@ document.getElementById('to-step-4').onclick = function() {
     }
     if (document.getElementById(`extra-bed-room-${roomId}`)?.checked) {
       bookingState.extraBeds.push(roomId);
+    }
+    if (document.getElementById(`cot-room-${roomId}`)?.checked) {
+      bookingState.cots.push(roomId);
+    }
+    if (document.getElementById(`bike-room-${roomId}`)?.checked) {
+      bookingState.bikes.push(roomId);
     }
   });
 
@@ -506,6 +540,8 @@ document.getElementById('booking-form').onsubmit = async function(e) {
     people: bookingState.people,
     dogs: bookingState.dogs,
     extraBeds: bookingState.extraBeds,
+    cots: bookingState.cots,
+    bikes: bookingState.bikes,
     breakfast: bookingState.breakfast,
     breakfastPeople: bookingState.breakfastPeople,
     name: bookingState.name,
@@ -580,7 +616,8 @@ function renderServicesStep() {
       </div>
     `;
 
-    if (room && room.dogAllowed) {
+    // Render available services based on fee >= 0
+    if (room && typeof room.dogFee !== 'undefined' && Number(room.dogFee) >= 0) {
       const id = `dog-room-${room.id}`;
       container.innerHTML += `
         <label>
@@ -589,12 +626,30 @@ function renderServicesStep() {
         </label><br>
       `;
     }
-    if (room && room.extraBedAllowed) {
+    if (room && typeof room.extraBedFee !== 'undefined' && Number(room.extraBedFee) >= 0) {
       const id = `extra-bed-room-${room.id}`;
       container.innerHTML += `
         <label>
           <input type="checkbox" id="${id}">
-          ${room.name} přistýlka (+${room.extraBedFee} Kč)
+          ${room.name} přistýlka (+${room.extraBedFee} Kč / noc)
+        </label><br>
+      `;
+    }
+    if (room && typeof room.cotFee !== 'undefined' && Number(room.cotFee) >= 0) {
+      const id = `cot-room-${room.id}`;
+      container.innerHTML += `
+        <label>
+          <input type="checkbox" id="${id}">
+          ${room.name} postýlka (+${room.cotFee} Kč)
+        </label><br>
+      `;
+    }
+    if (room && typeof room.bikeFee !== 'undefined' && Number(room.bikeFee) >= 0) {
+      const id = `bike-room-${room.id}`;
+      container.innerHTML += `
+        <label>
+          <input type="checkbox" id="${id}">
+          ${room.name} uložení kol (+${room.bikeFee} Kč)
         </label><br>
       `;
     }
@@ -634,7 +689,6 @@ function renderServicesStep() {
     bookingState.rooms.forEach(roomId => {
       const dogEl = document.getElementById(`dog-room-${roomId}`);
       if (dogEl) {
-        // initialize from bookingState
         dogEl.checked = bookingState.dogs.includes(roomId);
         dogEl.addEventListener('change', () => {
           if (dogEl.checked) {
@@ -654,6 +708,32 @@ function renderServicesStep() {
             if (!bookingState.extraBeds.includes(roomId)) bookingState.extraBeds.push(roomId);
           } else {
             bookingState.extraBeds = bookingState.extraBeds.filter(id => id !== roomId);
+          }
+          updateOrderSummary(3);
+        });
+      }
+
+      const cotEl = document.getElementById(`cot-room-${roomId}`);
+      if (cotEl) {
+        cotEl.checked = bookingState.cots.includes(roomId);
+        cotEl.addEventListener('change', () => {
+          if (cotEl.checked) {
+            if (!bookingState.cots.includes(roomId)) bookingState.cots.push(roomId);
+          } else {
+            bookingState.cots = bookingState.cots.filter(id => id !== roomId);
+          }
+          updateOrderSummary(3);
+        });
+      }
+
+      const bikeEl = document.getElementById(`bike-room-${roomId}`);
+      if (bikeEl) {
+        bikeEl.checked = bookingState.bikes.includes(roomId);
+        bikeEl.addEventListener('change', () => {
+          if (bikeEl.checked) {
+            if (!bookingState.bikes.includes(roomId)) bookingState.bikes.push(roomId);
+          } else {
+            bookingState.bikes = bookingState.bikes.filter(id => id !== roomId);
           }
           updateOrderSummary(3);
         });
@@ -695,8 +775,8 @@ function renderServicesStep() {
 
     // Initial summary render
     updateOrderSummary(3);
-  }, 0);
-}
+   }, 0);
+ }
 
-// Init: show step 1
-showStep(0);
+ // Init: show step 1
+ showStep(0);

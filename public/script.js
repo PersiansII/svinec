@@ -135,30 +135,137 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
 
   function dayDateFromStart(i){ const dt = new Date(visibleStart); dt.setDate(visibleStart.getDate() + i); dt.setHours(0,0,0,0); return dt; }
 
-  // booking occupies morning of D when its interval overlaps D 00:00-12:00
-  // occupies afternoon of D when it overlaps D 12:00-24:00
+  // booking occupies morning/afternoon halves (existing)
   function bookingOccupiesHalf(booking, roomId, D) {
     if (!booking.rooms || !booking.rooms.includes(roomId)) return { morning:false, afternoon:false };
     const S = new Date(booking.startDate || booking.start);
     const E = new Date(booking.endDate || booking.end);
-    // morning half: D 00:00 -> D 12:00
     const morningStart = new Date(D); morningStart.setHours(0,0,0,0);
     const morningEnd = new Date(D); morningEnd.setHours(12,0,0,0);
-    // afternoon half: D 12:00 -> next day 00:00
     const afternoonStart = new Date(D); afternoonStart.setHours(12,0,0,0);
     const afternoonEnd = new Date(D); afternoonEnd.setHours(24,0,0,0);
-
     const morning = (S < morningEnd) && (E > morningStart);
     const afternoon = (S < afternoonEnd) && (E > afternoonStart);
     return { morning, afternoon };
   }
 
+  // ----- NEW helper: does booking cover the night D (S <= D < E) -----
+  function bookingCoversNight(booking, D) {
+    if (!booking.startDate && !booking.start) return false;
+    const S = new Date(booking.startDate || booking.start); S.setHours(0,0,0,0);
+    const E = new Date(booking.endDate || booking.end); E.setHours(0,0,0,0);
+    return S.getTime() <= D.getTime() && E.getTime() > D.getTime();
+  }
+
   // combine regular rooms and commonRooms but keep type marker
+  // filter out rooms that should not be shown in calendar
+  const visibleRooms = rooms.filter(r => typeof r.showInCalendar === 'undefined' ? true : Boolean(r.showInCalendar));
+  const visibleCommon = (commonRooms || []).filter(r => typeof r.showInCalendar === 'undefined' ? true : Boolean(r.showInCalendar));
   const combined = [
-    ...rooms.map(r => ({ ...r, __type: 'room' })),
-    ...commonRooms.map(r => ({ ...r, __type: 'common' }))
+    ...visibleRooms.map(r => ({ ...r, __type: 'room' })),
+    ...visibleCommon.map(r => ({ ...r, __type: 'common' }))
   ];
 
+  // ----- UPDATED: compute counts for rooms and common rooms (equal weights per room) -----
+  const totalRoomsCount = visibleRooms.length;
+  const totalCommonCount = visibleCommon.length;
+
+  // helper: map percent -> occupancy class (unchanged)
+  function occupancyClass(p) {
+    if (p === 0) return 'occ-0';
+    if (p > 0 && p <= 30) return 'occ-1-30';
+    if (p > 30 && p <= 60) return 'occ-31-60';
+    if (p > 60 && p < 100) return 'occ-61-99';
+    return 'occ-100';
+  }
+
+  // NEW helper: return inline colors for percent (used as fallback)
+  function occupancyColors(p){
+    if (p === 0) return { bg:'#2ecc71', color:'#ffffff' };
+    if (p > 0 && p <= 30) return { bg:'#fff8c2', color:'#111111' };
+    if (p > 30 && p <= 60) return { bg:'#f1c40f', color:'#111111' };
+    if (p > 60 && p < 100) return { bg:'#e67e22', color:'#ffffff' };
+    return { bg:'#e74c3c', color:'#ffffff' };
+  }
+
+  // ----- NEW: create two occupancy rows: rooms and common rooms -----
+  const roomOccRow = document.createElement('tr');
+  roomOccRow.className = 'occ-row';
+  const roomLabel = document.createElement('td');
+  roomLabel.textContent = 'Obsazenost pokojů';
+  roomLabel.style.fontWeight = '600';
+  roomLabel.style.padding = '6px';
+  roomOccRow.appendChild(roomLabel);
+
+  const commonOccRow = document.createElement('tr');
+  commonOccRow.className = 'occ-row';
+  const commonLabel = document.createElement('td');
+  commonLabel.textContent = 'Obsazenost spol.';
+  commonLabel.style.fontWeight = '600';
+  commonLabel.style.padding = '6px';
+  commonOccRow.appendChild(commonLabel);
+
+  for (let i = 0; i < visibleDays; i++) {
+    const D = dayDateFromStart(i);
+
+    // count booked regular rooms: room is booked if there's any confirmed room booking covering night D that includes the room
+    let bookedRoomsCount = 0;
+    if (totalRoomsCount > 0) {
+      visibleRooms.forEach(r => {
+        const isBooked = (allBookings || []).some(b =>
+          b.type === 'room' &&
+          b.status === 'confirmed' &&
+          (b.rooms || []).includes(r.id) &&
+          bookingCoversNight(b, D)
+        );
+        if (isBooked) bookedRoomsCount++;
+      });
+    }
+
+    const roomsPercent = totalRoomsCount ? Math.min(100, Math.round((bookedRoomsCount / totalRoomsCount) * 100)) : 0;
+    const tdRooms = document.createElement('td');
+    tdRooms.textContent = `${roomsPercent}%`;
+    const rc = occupancyColors(roomsPercent);                     // <-- apply colors inline
+    tdRooms.classList.add(occupancyClass(roomsPercent));
+    tdRooms.style.background = rc.bg;
+    tdRooms.style.color = rc.color;
+    tdRooms.setAttribute('title', `Obsazeno pokojů: ${bookedRoomsCount} / ${totalRoomsCount}`);
+    tdRooms.style.textAlign = 'center';
+    tdRooms.style.padding = '4px';
+    roomOccRow.appendChild(tdRooms);
+
+    // count booked common rooms: common room is booked if any confirmed common booking overlaps date D and includes that common room id
+    let bookedCommonCount = 0;
+    if (totalCommonCount > 0) {
+      visibleCommon.forEach(c => {
+        const isBooked = (allBookings || []).some(b =>
+          b.type === 'common' &&
+          b.status === 'confirmed' &&
+          (b.rooms || []).includes(c.id) &&
+          bookingCoversNight(b, D)
+        );
+        if (isBooked) bookedCommonCount++;
+      });
+    }
+
+    const commonPercent = totalCommonCount ? Math.min(100, Math.round((bookedCommonCount / totalCommonCount) * 100)) : 0;
+    const tdCommon = document.createElement('td');
+    tdCommon.textContent = `${commonPercent}%`;
+    const cc = occupancyColors(commonPercent);                    // <-- apply colors inline
+    tdCommon.classList.add(occupancyClass(commonPercent));
+    tdCommon.style.background = cc.bg;
+    tdCommon.style.color = cc.color;
+    tdCommon.setAttribute('title', `Obsazeno společných: ${bookedCommonCount} / ${totalCommonCount}`);
+    tdCommon.style.textAlign = 'center';
+    tdCommon.style.padding = '4px';
+    commonOccRow.appendChild(tdCommon);
+  }
+
+  // insert occupancy rows BEFORE listing rooms/common rooms
+  tbody2.appendChild(roomOccRow);
+  tbody2.appendChild(commonOccRow);
+
+  // ...existing code: combined.forEach(...) to render each room row...
   combined.forEach(room => {
     const tr = document.createElement('tr');
     const tdName = document.createElement('td');

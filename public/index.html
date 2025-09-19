@@ -35,6 +35,15 @@
       overflow-x: auto;
     }
 
+    /* ---------- occupancy (Obsazenost) colors ---------- */
+    .occ-row td { padding: 6px; border-radius: 6px; }
+    .occ-row td:first-child { text-align: left; font-weight: 600; background: transparent; color: inherit; }
+    .occ-0 { background: #2ecc71; color: #ffffff; }       /* 0% - green */
+    .occ-1-30 { background: #fff8c2; color: #111111; }    /* 1-30% - light yellow */
+    .occ-31-60 { background: #f1c40f; color: #111111; }   /* 31-60% - yellow */
+    .occ-61-99 { background: #e67e22; color: #ffffff; }   /* 61-99% - orange */
+    .occ-100 { background: #e74c3c; color: #ffffff; }     /* 100% - red */
+
     @media (max-width: 1024px) {
       .center-wrap { width: 94vw; }
     }

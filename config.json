@@ -1,5 +1,16 @@
 {
   "adminPassword": "admin123",
   "ownerEmail": "owner@example.com",
-  "pendingTimeoutMinutes": 5
+  "adminEmail": "theonesummerleaf@gmail.com",
+  "emailFrom": "theonesummerleaf@gmail.com",
+  "pendingTimeoutMinutes": 5,
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 465,
+    "secure": true,
+    "auth": {
+      "user": "theonesummerleaf@gmail.com",
+      "pass": "dusk xygh qwew riqg"
+    }
+  }
 }

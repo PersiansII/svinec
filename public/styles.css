@@ -479,3 +479,45 @@ th[data-today="true"] {
   /* fallback: allow horizontal scroll but keep everything readable */
   #half-calendar-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
+
+/* Occupancy row (higher specificity so it overrides .half-table td { background: transparent }) */
+.half-table tr.occ-row td {
+  padding: 6px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+/* keep first column label transparent and left-aligned */
+.half-table tr.occ-row td:first-child {
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  text-align: left;
+  padding-left: 8px;
+}
+
+/* actual occupancy color buckets */
+.half-table tr.occ-row td.occ-0    { background: #2ecc71; color: #ffffff; } /* 0% - green */
+.half-table tr.occ-row td.occ-1-30 { background: #fff8c2; color: #111111; } /* 1-30% - light yellow */
+.half-table tr.occ-row td.occ-31-60{ background: #f1c40f; color: #111111; } /* 31-60% - yellow */
+.half-table tr.occ-row td.occ-61-99{ background: #e67e22; color: #ffffff; } /* 61-99% - orange */
+.half-table tr.occ-row td.occ-100  { background: #e74c3c; color: #ffffff; } /* 100% - red */
+
+/* Small-calendar occupancy colors (higher specificity) */
+.cal-day.occ-0,
+.calendar-table td.occ-0 { background: #2ecc71 !important; color: #ffffff !important; }
+.cal-day.occ-1-30,
+.calendar-table td.occ-1-30 { background: #fff8c2 !important; color: #111111 !important; }
+.cal-day.occ-31-60,
+.calendar-table td.occ-31-60 { background: #f1c40f !important; color: #111111 !important; }
+.cal-day.occ-61-99,
+.calendar-table td.occ-61-99 { background: #e67e22 !important; color: #ffffff !important; }
+.cal-day.occ-100,
+.calendar-table td.occ-100 { background: #e74c3c !important; color: #ffffff !important; }
+
+/* make sure selected/today styles still visible — keep padding / rounded corners */
+.cal-day.occ-0, .cal-day.occ-1-30, .cal-day.occ-31-60, .cal-day.occ-61-99, .cal-day.occ-100 {
+  border-radius: 6px;
+  padding: 4px;
+  box-sizing: border-box;
+}

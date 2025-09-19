@@ -1,7 +1,7 @@
 [
   {
     "id": 1,
-    "name": "Pokoj 1",
+    "name": "Penthouse",
     "price": 100,
     "beds": 3,
     "dogAllowed": true,
@@ -15,7 +15,12 @@
       "23834f231a08fa186864f6af480ab93a",
       "4daa3bccd0fbb6c03666a111dc661f5f"
     ],
-    "description": "🌿 Útulný a prostorný pokoj\r\n🛏️ Manželská postel pro 2 osoby\r\n🛋️ Jednolůžková postel\r\n\r\n➕ Možnost přistýlky\r\n🚿 Vlastní koupelna\r\n🐕 Pobyt se psem povolen\r\n"
+    "description": "🌿 Útulný a prostorný pokoj\r\n🛏️ Manželská postel pro 2 osoby\r\n🛋️ Jednolůžková postel\r\n\r\n➕ Možnost přistýlky\r\n🚿 Vlastní koupelna\r\n🐕 Pobyt se psem povolen\r\n",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "X"
   },
   {
     "id": 2,
@@ -23,9 +28,9 @@
     "price": 900,
     "beds": 4,
     "dogAllowed": true,
-    "dogFee": 0,
+    "dogFee": 1,
     "extraBedAllowed": true,
-    "extraBedFee": 0,
+    "extraBedFee": 2,
     "image": "/images/pokoj2.jpg",
     "photo": "d560293682371b4f0944686247f0a285",
     "photos": [
@@ -33,7 +38,12 @@
       "b72116d7c8529f2e69ffe5cac710cadf",
       "490422b5025eb24341c2fe6c908e0124"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": 3,
+    "bikeFee": 5,
+    "group": "skupiny"
   },
   {
     "id": 3,
@@ -51,7 +61,12 @@
       "1ec624a944a9582c25f8317deff2251d",
       "04756d7c9822a3d8394b264f0d546161"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "X"
   },
   {
     "id": 4,
@@ -68,7 +83,12 @@
       "ea7129b4b3af6134f46bc304558b8c38",
       "9e15a35acc043abc132d4850244699d6"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "X"
   },
   {
     "id": 5,
@@ -83,12 +103,15 @@
     "photo": "645f85a01560d75ec2542a7d084f541c",
     "photos": [
       "c47e77165abf0425a5cab73024f72528",
-      "92d5644d4c9ebb85ec8d872fe5e0b61e",
-      "a4485b55b7ae73dd65db584a9e190c3a",
-      "e0b8d70158fb082f1a9d5d773379d379",
-      "4d262035aa1b49e9bf2b0d637eb0287b"
+      "4d262035aa1b49e9bf2b0d637eb0287b",
+      "f9ac6d5aa1e749670f5a0252dbfbfe9a"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "X"
   },
   {
     "id": 6,
@@ -106,7 +129,12 @@
       "50f56c134c439ab8561fcce2b961c08a",
       "2ee878c46ebb089280e26c906b68b765"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "prostory"
   },
   {
     "id": 7,
@@ -125,7 +153,12 @@
       "3380038b1d0a2708272d0080cd65140f",
       "a42f8914e916f90f3518d75e281d8edb"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "prostory"
   },
   {
     "id": 8,
@@ -142,7 +175,12 @@
       "c7b39db22efed6661da8e5f1da8add7c",
       "23ba988257b660b5a9ce4c012db4506e"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "prostory"
   },
   {
     "id": 9,
@@ -161,7 +199,12 @@
       "a3a169a98cee11e51c2e7e3574a4a9e3",
       "a10c04ab66e1e61e4890d88972188c63"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "prostory"
   },
   {
     "id": 10,
@@ -178,7 +221,12 @@
       "d01d3e248843252cbec0d92d38038f3f",
       "0897fdd000ea98efe551fbec5ee123b9"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "prostory"
   },
   {
     "id": 11,
@@ -195,7 +243,12 @@
       "df0a78b2bc1ef3d4dea27661fcdca816",
       "2caf0ed5b1281b169ce603da88a91f40"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "prostory"
   },
   {
     "id": 12,
@@ -213,7 +266,12 @@
       "b31135ac4ec441516a0f05d8127724cb",
       "07055efe99dc1e9e49ce3a95534b9bdb"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "prostory"
   },
   {
     "id": 13,
@@ -231,7 +289,12 @@
       "e863a8792c23c491964e373f866c9c93",
       "f21f0a1ec02d21ae626b99637eb7d62a"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "prostory"
   },
   {
     "id": 14,
@@ -251,6 +314,11 @@
       "2dd956134c77076631215bec87e02be6",
       "63fb11e0225ee6ae6494d6761c930dbd"
     ],
-    "description": "Testing"
+    "description": "Testing",
+    "bookable": true,
+    "showInCalendar": true,
+    "cotFee": -1,
+    "bikeFee": -1,
+    "group": "prostory"
   }
 ]
