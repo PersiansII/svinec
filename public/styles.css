@@ -30,11 +30,11 @@ body{
   gap:10px;
 }
 
-/* Calendar card — lifted, soft gradient, subtle depth */
+/* Calendar card — sharp corners now */
 .calendar-card {
   width:100%;
   background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(250,250,252,0.98) 100%);
-  border-radius: 14px;
+  border-radius: 0;
   padding:12px;
   box-sizing: border-box;
   box-shadow:
@@ -65,14 +65,14 @@ body{
   gap:8px;
 }
 
-/* small icon-style buttons */
+/* small icon-style buttons — sharp */
 .button-icon{
   background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(246,249,255,0.9));
   border: 1px solid rgba(16,24,40,0.06);
   height:40px;
   min-width:40px;
   padding:6px;
-  border-radius:10px;
+  border-radius: 0;
   display:inline-flex;
   align-items:center;
   justify-content:center;
@@ -82,11 +82,11 @@ body{
 }
 .button-icon:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(16,24,40,0.09); }
 
-/* view toggle pill */
+/* view toggle pill — sharp */
 .view-toggle{
   display:inline-flex;
   background:linear-gradient(90deg, rgba(0,0,0,0.02), transparent);
-  border-radius:999px;
+  border-radius: 0;
   padding:4px;
   gap:6px;
 }
@@ -94,7 +94,7 @@ body{
   border:0;
   background:transparent;
   padding:8px 12px;
-  border-radius:999px;
+  border-radius: 0;
   cursor:pointer;
   color:var(--muted);
   font-weight:600;
@@ -112,11 +112,11 @@ body{
   gap:8px;
 }
 
-/* day tile */
+/* day tile — sharp corners */
 .cal-day{
   background:transparent;
   padding:8px 6px;
-  border-radius:10px;
+  border-radius: 0;
   text-align:center;
   cursor:pointer;
   transition:transform .12s ease, box-shadow .12s ease, background .12s;
@@ -158,7 +158,7 @@ body{
 }
 .cal-day.today{
   outline:3px solid rgba(37,99,235,0.12);
-  border-radius:10px;
+  border-radius:0;
 }
 
 /* compact mobile layout */
@@ -197,25 +197,32 @@ body{
   filter: brightness(0.9);
 }
 
-/* ✅ Highlight today's column with a blue border */
+/* ✅ Highlight today's column — remove blue borders (keep background if desired) */
 th[data-today="true"],
 td.today-column {
-  border-left: 3px solid #2196F3;
-  border-right: 3px solid #2196F3;
+  /* remove border lines that used to draw blue edges */
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
 }
 
+/* Keep today's header background / color but no borders */
 th[data-today="true"] {
-  border-top: 3px solid #2196F3;
-}
-
-td.today-column:last-child {
-  border-bottom: 3px solid #2196F3;
-}
-
-/* Highlight today's column with a blue border or background */
-td.today-column {
-  border: 2px solid #1976d2 !important;
   background: #e3f2fd !important;
+  color: #0f5132; /* keep contrast */
+  border-bottom: none !important;
+}
+
+/* Ensure today column cells have no border, keep background */
+td.today-column {
+  border: none !important;
+  background: #e3f2fd !important;
+}
+
+/* remove any other specific bottom border that targeted last-child */
+td.today-column:last-child {
+  border-bottom: none !important;
 }
 
 /* Center the calendar container */
@@ -283,10 +290,11 @@ td.today-column {
 th[data-today="true"] {
   background-color: #d1e7dd; /* Light green background for today's date */
   color: #0f5132; /* Dark green text for contrast */
+  border-bottom: none !important;
 }
 
-th[data-today="true"] {
-  border-bottom: 2px solid #1976d2 !important;
+td.today-column {
+  border: none !important;
   background: #e3f2fd !important;
 }
 
@@ -322,43 +330,53 @@ th[data-today="true"] {
   width: 150px;       /* narrower */
   text-align: left;
   padding: 6px 8px;   /* less vertical space */
-  border-radius: 8px;
+  border-radius: 0;
 }
 
-/* cell container with subtle 3D panel */
+/* cell container with subtle 3D panel — sharp */
 .half-cell {
   position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 0;
   background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(245,247,250,0.6));
   box-shadow: 0 6px 10px rgba(16,24,40,0.04), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
-/* triangular halves using clip-path with soft inner shadows */
+/* triangular halves using clip-path with soft inner shadows (REPLACED: vertical split) */
 .half {
   position: absolute;
-  width: 100%;
-  height: 100%;
   top: 0;
-  left: 0;
-  box-sizing: border-box;
-  display:block;
+  height: 100%;
+  box-sizing: border-box; /* ensure borders are included in sizing */
+  display: block;
   transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
   backface-visibility: hidden;
+  width: 50%;               /* each half takes half width */
 }
 
-/* morning / afternoon shapes */
+/* morning / afternoon shapes — now vertical halves */
 .half.morning {
-  clip-path: polygon(0 0, 100% 0, 0 100%);
-  transform-origin: left top;
-  box-shadow: inset -6px -10px 24px rgba(14,20,41,0.03);
+  left: 0;
+  transform-origin: left center;
+  /* subtle inner shadow from the right edge to give depth */
+  box-shadow: inset -6px 0 16px rgba(14,20,41,0.03);
 }
 .half.afternoon {
-  clip-path: polygon(100% 100%, 0 100%, 100% 0);
-  transform-origin: right bottom;
-  box-shadow: inset 6px 10px 24px rgba(14,20,41,0.03);
+  right: 0;
+  left: auto;
+  transform-origin: right center;
+  /* subtle inner shadow from the left edge */
+  box-shadow: inset 6px 0 16px rgba(14,20,41,0.03);
+}
+
+/* booking boundary markers: 3px black lines at booking start / end */
+.half.booking-start {
+  border-left: 3px solid #000;
+}
+.half.booking-end {
+  border-right: 3px solid #000;
 }
 
 /* color states — richer gradients */
@@ -381,11 +399,12 @@ th[data-today="true"] {
   color: #333;
 }
 
-/* checkout visual (morning only) — vivid blue */
+/* checkout visual (morning only) — was blue, now reuse booked red styling */
 .half.morning.checkout {
-  background: linear-gradient(180deg, #2EA3FF 0%, #0077E6 100%);
+  /* changed to match .half.booked visual (red gradient) */
+  background: linear-gradient(180deg, #F87171 0%, #EF4444 100%);
   color: #fff;
-  box-shadow: 0 8px 30px rgba(2, 118, 255, 0.14);
+  box-shadow: 0 6px 18px rgba(239,68,68,0.12);
 }
 
 /* hover: slightly lift the cell for affordance */
@@ -397,14 +416,15 @@ th[data-today="true"] {
 /* small legend updated */
 .half-legend { display:flex; gap:12px; align-items:center; margin-top:12px; font-size:0.92rem; color:#25303f; }
 .half-legend .item { display:flex; gap:8px; align-items:center; }
-.half-legend .sw { width:22px; height:14px; border-radius:6px; display:inline-block; box-shadow: 0 4px 12px rgba(16,24,40,0.06); }
+.half-legend .sw { width:22px; height:14px; border-radius:0; display:inline-block; box-shadow: 0 4px 12px rgba(16,24,40,0.06); }
 
 /* preserve earlier colors for legend markers */
 .half-legend .sw.booked { background: linear-gradient(180deg,#F87171,#EF4444); }
 .half-legend .sw.partial { background: linear-gradient(180deg,#FFE9A8,#FFD166); }
 .half-legend .sw.pending { background: linear-gradient(180deg,#FFECB3,#FFE082); }
 .half-legend .sw.available { background: linear-gradient(180deg,#6EE7B7,#34D399); }
-.half-legend .sw.checkout { background: linear-gradient(180deg,#2EA3FF,#0077E6); }
+/* changed checkout legend marker to use same red booked gradient */
+.half-legend .sw.checkout { background: linear-gradient(180deg,#F87171,#EF4444); }
 
 /* Responsive wrapper for the half-day calendar */
 #half-calendar-container {
@@ -450,10 +470,11 @@ th[data-today="true"] {
   z-index: 6;
   background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(245,247,250,0.96));
   box-shadow: 2px 0 6px rgba(16,24,40,0.04);
+  border-radius: 0;
 }
 
 /* Shrink geometric shapes so diagonals still look good on small screens */
-.half-cell { border-radius: 6px; }
+.half-cell { border-radius: 0; }
 .half { transition: transform .08s ease, box-shadow .08s ease, opacity .08s ease; }
 
 /* Further reductions on narrower viewports */
@@ -483,7 +504,7 @@ th[data-today="true"] {
 /* Occupancy row (higher specificity so it overrides .half-table td { background: transparent }) */
 .half-table tr.occ-row td {
   padding: 6px;
-  border-radius: 6px;
+  border-radius: 0;
   text-align: center;
 }
 
@@ -496,12 +517,32 @@ th[data-today="true"] {
   padding-left: 8px;
 }
 
-/* actual occupancy color buckets */
-.half-table tr.occ-row td.occ-0    { background: #2ecc71; color: #ffffff; } /* 0% - green */
-.half-table tr.occ-row td.occ-1-30 { background: #fff8c2; color: #111111; } /* 1-30% - light yellow */
-.half-table tr.occ-row td.occ-31-60{ background: #f1c40f; color: #111111; } /* 31-60% - yellow */
-.half-table tr.occ-row td.occ-61-99{ background: #e67e22; color: #ffffff; } /* 61-99% - orange */
-.half-table tr.occ-row td.occ-100  { background: #e74c3c; color: #ffffff; } /* 100% - red */
+/* actual occupancy color buckets — use same richer gradients as .half states and force no rounding */
+.half-table tr.occ-row td.occ-0 {
+  background: linear-gradient(180deg, #6EE7B7 0%, #34D399 100%) !important; /* available/green */
+  color: #053019 !important;
+  border-radius: 0 !important;
+}
+.half-table tr.occ-row td.occ-1-30 {
+  background: linear-gradient(180deg,#FFF7CC 0%,#FFE9A8 100%) !important; /* light partial (1-30%) */
+  color: #111111 !important;
+  border-radius: 0 !important;
+}
+.half-table tr.occ-row td.occ-31-60 {
+  background: linear-gradient(180deg, #FFE9A8 0%, #FFD166 100%) !important; /* partial / yellow */
+  color: #2b2b00 !important;
+  border-radius: 0 !important;
+}
+.half-table tr.occ-row td.occ-61-99 {
+  background: linear-gradient(180deg, #F59E0B 0%, #E67E22 100%) !important; /* orange band */
+  color: #ffffff !important;
+  border-radius: 0 !important;
+}
+.half-table tr.occ-row td.occ-100 {
+  background: linear-gradient(180deg, #F87171 0%, #EF4444 100%) !important; /* booked / red */
+  color: #ffffff !important;
+  border-radius: 0 !important;
+}
 
 /* Small-calendar occupancy colors (higher specificity) */
 .cal-day.occ-0,
@@ -517,7 +558,41 @@ th[data-today="true"] {
 
 /* make sure selected/today styles still visible — keep padding / rounded corners */
 .cal-day.occ-0, .cal-day.occ-1-30, .cal-day.occ-31-60, .cal-day.occ-61-99, .cal-day.occ-100 {
-  border-radius: 6px;
+  border-radius: 0;
   padding: 4px;
   box-sizing: border-box;
+}
+
+/* Past days: muted / greyed-out appearance (less aggressive — keep green tint) */
+.half-table th.past,
+.half-table td.past,
+thead th.past {
+  /* keep some color (not full grayscale), slightly darker and a bit desaturated */
+  filter: grayscale(40%) saturate(0.85) brightness(0.94);
+  opacity: 0.86;
+  color: #6f7a62; /* muted yet still greenish text */
+}
+
+/* Prevent hover lift / affordance on past cells */
+.half-table td.past:hover .half-cell,
+.half-table td.past .half-cell {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Make halves inside past cells also visually muted but still green-ish */
+.half-table td.past .half {
+  filter: grayscale(30%) saturate(0.9) brightness(0.96);
+  opacity: 0.95;
+}
+
+/* visually mute disabled buttons (including prev/next arrows) */
+button:disabled,
+.button-icon:disabled {
+  opacity: 0.45;
+  cursor: default;
+  filter: grayscale(40%) brightness(0.95);
+  box-shadow: none;
+  transform: none;
+  pointer-events: none; /* safeguard */
 }

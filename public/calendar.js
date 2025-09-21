@@ -86,9 +86,9 @@ async function renderCalendar() {
   const table = document.createElement('table');
   table.className = 'calendar-table';
   const header = document.createElement('tr');
-  header.innerHTML = `<th><button id="prev-month">&lt;</button></th>
+  header.innerHTML = `<th><button id="prev-month">‹</button></th>
     <th colspan="5">${monthStart.toLocaleString('cs-CZ', {month:'long', year:'numeric'})}</th>
-    <th><button id="next-month">&gt;</button></th>`;
+    <th><button id="next-month">›</button></th>`;
   table.appendChild(header);
 
   const daysRow = document.createElement('tr');
@@ -177,7 +177,6 @@ function selectDate(date) {
         warn.id = 'date-warning-calendar';
         warn.style.marginTop = '8px';
         warn.style.padding = '8px';
-        warn.style.borderRadius = '6px';
         warn.style.background = '#ffe6e6';
         warn.style.color = '#7a0000';
         warn.style.fontWeight = '600';
@@ -186,6 +185,10 @@ function selectDate(date) {
       }
       warn.textContent = 'Jejda! V tohle datum je už chata plná. Zkuste prosím jiné datum.';
       warn.style.display = 'block';
+      const nextBtn = document.getElementById('to-step-2');
+      if (nextBtn) nextBtn.disabled = true;
+      const footerNext = document.getElementById('footer-next');
+      if (footerNext) footerNext.disabled = true;
     } else {
       const warn = document.getElementById('date-warning-calendar');
       if (warn) warn.style.display = 'none';
@@ -207,13 +210,71 @@ function selectDate(date) {
 
 function updateSelectedDates() {
   const el = document.getElementById('selected-dates');
+  const fmt = (d) => `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+
+  // helper: ensure/hide/show warning element
+  const ensureWarning = () => {
+    let w = document.getElementById('date-warning-calendar');
+    if (!w && el && el.parentNode) {
+      w = document.createElement('div');
+      w.id = 'date-warning-calendar';
+      w.style.marginTop = '8px';
+      w.style.padding = '8px';
+      w.style.background = '#ffe6e6';
+      w.style.color = '#7a0000';
+      w.style.fontWeight = '600';
+      w.style.border = '1px solid #ff9b9b';
+      el.parentNode.insertBefore(w, el.nextSibling);
+    }
+    return w;
+  };
+
+  // default: disable Next until valid range
+  const nextBtn = document.getElementById('to-step-2');
+  const footerNext = document.getElementById('footer-next');
+
   if (calStart && calEnd) {
-    el.textContent = `Vybráno: ${calStart.toLocaleDateString()} – ${calEnd.toLocaleDateString()}`;
+    // format display as dd-mm-yyyy – dd-mm-yyyy
+    el.textContent = `Vybráno: ${fmt(calStart)} – ${fmt(calEnd)}`;
+    // check if any night in range is fully booked
+    let hasRed = false;
+    const cur = new Date(calStart);
+    while (cur < calEnd) {
+      const iso = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+      const pct = calOccupancyMap[iso] || 0;
+      if (pct >= 100) { hasRed = true; break; }
+      cur.setDate(cur.getDate() + 1);
+    }
+    const warn = ensureWarning();
+    if (warn) {
+      warn.textContent = 'Jejda! Vámi vybraný rozsah obsahuje alespoň jeden plně obsazený den. Zkuste prosím jiné datum.';
+      warn.style.display = hasRed ? 'block' : 'none';
+    }
+    if (nextBtn) nextBtn.disabled = !!hasRed;
+    if (footerNext) footerNext.disabled = !!hasRed;
   } else if (calStart) {
-    el.textContent = `Vyberte datum odjezdu po ${calStart.toLocaleDateString()}`;
+    // single start selected: prompt for end, show dd-mm-yyyy
+    el.textContent = `Vyberte datum odjezdu po ${fmt(calStart)}`;
+    const warn = document.getElementById('date-warning-calendar');
+    if (warn) warn.style.display = 'none';
+    if (nextBtn) nextBtn.disabled = true;
+    if (footerNext) footerNext.disabled = true;
   } else {
     el.textContent = '';
+    const warn = document.getElementById('date-warning-calendar');
+    if (warn) warn.style.display = 'none';
+    if (nextBtn) nextBtn.disabled = true;
+    if (footerNext) footerNext.disabled = true;
   }
+
+  // Notify booking footer to refresh summary/gating for Step 1, if present
+  try {
+    if (typeof window.updateFooterForStep === 'function') {
+      window.updateFooterForStep(0);
+    } else if (typeof window.renderFooterSummary === 'function') {
+      window.renderFooterSummary(1);
+    }
+  } catch (e) { /* ignore */ }
 }
 
 window.getSelectedDates = () => ({
@@ -226,3 +287,15 @@ window.getSelectedDates = () => ({
 });
 
 document.addEventListener('DOMContentLoaded', renderCalendar);
+
+// Expose occupancy map for other scripts (read-only copy)
+window.getCalendarOccupancyMap = () => ({ ...calOccupancyMap });
+// Reset selection (no dates chosen)
+window.resetCalendarSelection = () => {
+  try {
+    calStart = null;
+    calEnd = null;
+    updateSelectedDates();
+    if (typeof renderCalendar === 'function') renderCalendar();
+  } catch (e) { /* ignore */ }
+};

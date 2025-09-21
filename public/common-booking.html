@@ -7,18 +7,47 @@
   <link rel="stylesheet" href="booking.css" />
   <style>
     /* match booking.html look & layout */
-    body{font-family:Arial,Helvetica,sans-serif;background:#f7f7f7;padding:20px}
-    .wizard{max-width:720px;margin:0 auto;background:#fff;padding:18px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+    body{font-family:Arial,Helvetica,sans-serif;background:#f7f7f7;padding:20px 20px 90px 20px}
+  .wizard{width:90%;max-width:1200px;margin:0 auto;background:#fff;padding:18px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
     h1{margin-top:0}
     .step{display:none}
-    .step.active{display:block}
-    .step-buttons{margin-top:16px;display:flex;gap:10px}
+  .step.active{display:block;max-width:1100px;margin:0 auto}
+  .step-buttons{margin-top:16px;display:flex;gap:10px;justify-content:flex-end}
+  .step-buttons button{width:auto}
+  /* Hide inline step buttons; sticky footer will handle navigation */
+  .step-buttons{display:none !important}
+  /* Consistent, narrower Next button width */
+  .next-btn{width:140px}
     .slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:8px}
     .slot{padding:10px;border-radius:6px;border:1px solid #ddd;background:#fff;display:flex;align-items:center;gap:8px}
     .slot.disabled{background:#eee;color:#777;text-decoration:line-through;border-color:#ccc}
     label{display:block}
     .meta{font-size:0.9rem;color:#555}
     .error{color:#b71c1c;margin-top:8px}
+  /* Step 2: Vertically stacked common room cards */
+  #common-rooms-list{display:block;}
+  .common-room-card{border:3px solid #4CAF50;background:#fff;margin:0 auto 14px auto;padding:14px;max-width:900px;box-shadow:0 1px 6px rgba(0,0,0,0.06)}
+  .crc-main{display:flex;gap:16px;align-items:center}
+  .crc-image{width:200px;height:140px;object-fit:cover;background:#f2f2f2;cursor:pointer}
+  .crc-content{flex:1;min-width:0}
+  .crc-title{font-weight:700;color:#222;margin-bottom:6px}
+  .crc-desc{color:#444;line-height:1.4;white-space:pre-wrap;margin-bottom:8px}
+  .crc-stats{display:flex;gap:16px;color:#333;margin:6px 0}
+  .crc-stat{padding:6px 8px;border:1px solid #e6e6e6;background:#fafafa}
+  .crc-actions{display:flex;align-items:center;gap:12px;margin-top:8px;min-height:44px}
+  .crc-people{display:inline-flex;align-items:center;visibility:hidden;white-space:nowrap;margin-left:8px}
+  .crc-people.show{visibility:visible}
+  .crc-people input{width:64px;height:28px;text-align:center;font-size:0.95rem;margin-left:8px}
+  /* Ensure labels and controls are vertically centered and same height */
+  .crc-actions label, .crc-people label{display:inline-flex;align-items:center;margin:0;min-height:32px;line-height:32px;gap:8px}
+  .crc-actions input[type="checkbox"]{margin:0}
+  .crc-gallery-link{display:inline-block;margin-top:6px;color:#1976d2;text-decoration:underline;cursor:pointer}
+
+  @media (max-width: 720px){
+    .crc-main{flex-direction:column}
+    .crc-image{width:100%;height:180px}
+    .common-room-card{padding:12px}
+  }
     /* calendar styles */
     .calendar { margin-top:12px; border:1px solid #e0e0e0; border-radius:6px; padding:8px; background:#fff; overflow:hidden; }
     .cal-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; }
@@ -61,71 +90,101 @@
     }
 
     @media (max-width:480px){ .slots{grid-template-columns:repeat(1,1fr)} }
+  @media (max-width:900px){ .wizard{width:94%;} }
+  @media (min-width:1400px){ .wizard{max-width:1280px;} }
+
+  /* Constrain calendar block so buttons align with its right edge */
+  #unified-flow-1 { max-width: 420px; margin: 0 auto; }
+
+  /* Sticky footer (match booking.html) */
+  .sticky-footer{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #e6e6e6;box-shadow:0 -2px 8px rgba(0,0,0,.06);z-index:900}
+  .sticky-footer .sf-inner{width:90%;max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 4px}
+  .footer-summary{font-size:.95rem;color:#333;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .footer-chip{padding:6px 8px;border:1px solid #e6e6e6;background:#fafafa}
+  .footer-buttons{display:flex;gap:10px}
+  .footer-buttons .next-btn{width:140px}
+  /* add bottom space inside wizard like booking.html */
+  .wizard{ padding-bottom: 96px; }
+  @media(max-width:720px){.sticky-footer .sf-inner{width:94%;gap:10px}.footer-summary{font-size:.9rem}}
   </style>
 </head>
 <body>
   <div class="wizard">
-    <h1>Rezervace společných prostor</h1>
 
-    <!-- Step 1: select rooms (multiple) + calendar -->
+    <!-- Step 1: calendar only (unified design) -->
     <div class="step active" id="step-1">
-      <p>Vyberte jednu nebo více místností a datum:</p>
 
-      <div id="rooms-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-bottom:12px"></div>
-
-      <label>Vybrané datum: <input type="date" id="date" required /></label>
-
-      <div id="calendar-widget" class="calendar" aria-hidden="false">
-        <div class="cal-head">
-          <button type="button" id="cal-prev">&lt;</button>
-          <div id="cal-month"></div>
-          <button type="button" id="cal-next">&gt;</button>
+      <input type="hidden" id="date" />
+      <div id="unified-flow-1">
+        <p style="text-align:center">vyberte termín</p>
+        <div id="calendar-container"></div>
+        <div id="selected-dates" style="margin:10px 0; color:#2196F3;"></div>
+        <div class="step-buttons">
+          <button type="button" id="to-step-2" class="next-btn">Další</button>
         </div>
-        <div id="cal-grid" class="cal-grid"></div>
-      </div>
-
-      <div class="step-buttons">
-        <button type="button" id="to-step-2">Další</button>
       </div>
     </div>
 
-    <!-- Step 2: timeslots -->
+    <!-- Step 2: choose common rooms (cards) -->
     <div class="step" id="step-2">
-      <p>Vyberte časové bloky (3hodinové). Můžete vybrat více bloků. Již obsazené budou šedé a přeškrtnuté.</p>
-      <div id="slots" class="slots"></div>
-      <div id="slots-error" class="error" style="display:none">Vyberte alespoň jeden časový blok.</div>
-
+      
+      <div id="common-rooms-list"></div>
+      <div id="common-rooms-error" class="error" style="display:none">Vyberte alespoň jednu místnost a zadejte počet osob.</div>
       <div class="step-buttons">
         <button type="button" id="back-to-1">Zpět</button>
-        <button type="button" id="to-step-3">Další</button>
+  <button type="button" id="to-step-3" class="next-btn" disabled>Další</button>
       </div>
     </div>
 
-    <!-- Step 3: people + contact -->
+    <!-- Step 3: timeslots -->
     <div class="step" id="step-3">
-      <p>Zadejte počet osob a kontaktní údaje pro odeslání žádosti:</p>
+      
+      <div id="slots" class="slots"></div>
+      <div id="slots-error" class="error" style="display:none">Vyberte alespoň jeden časový blok.</div>
+      <div class="step-buttons">
+        <button type="button" id="back-to-2">Zpět</button>
+  <button type="button" id="to-step-4" class="next-btn">Další</button>
+      </div>
+    </div>
 
-      <label>Počet osob:
-        <input type="number" id="people" min="1" value="1" />
-      </label>
-
+    <!-- Step 4: people + contact -->
+    <div class="step" id="step-4">
+      <p>Zadejte kontaktní údaje pro odeslání žádosti:</p>
       <label>Jméno:
         <input type="text" id="name" required />
       </label>
-
       <label>Email:
         <input type="email" id="email" required />
       </label>
-
       <label>Telefon:
         <input type="tel" id="phone" />
       </label>
-
       <div id="submit-msg" class="meta" style="margin-top:8px"></div>
-
       <div class="step-buttons">
-        <button type="button" id="back-to-2">Zpět</button>
+        <button type="button" id="back-to-3">Zpět</button>
         <button type="button" id="submit-booking">Odeslat žádost</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shared Photo Modal (same IDs as unified) -->
+  <div id="photo-modal" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);align-items:center;justify-content:center">
+    <span id="photo-modal-close" style="position:absolute;top:30px;right:40px;font-size:2.5rem;color:#fff;cursor:pointer">&times;</span>
+    <img id="photo-modal-img" src="" style="max-width:90vw;max-height:80vh;box-shadow:0 4px 32px #000">
+    <div id="photo-modal-nav" style="margin-top:20px;text-align:center">
+      <button id="photo-prev">&#8592;</button>
+      <button id="photo-next">&#8594;</button>
+    </div>
+  </div>
+
+  <!-- Sticky Footer (aligned with booking.html) -->
+  <div id="sticky-footer" class="sticky-footer">
+    <div class="sf-inner">
+      <div id="footer-summary" class="footer-summary"></div>
+      <div class="footer-buttons">
+        <button type="button" id="footer-back">Zpět</button>
+        <button type="button" id="footer-next" class="next-btn">Další</button>
+        <button type="button" id="footer-submit" style="display:none">Odeslat</button>
       </div>
     </div>
   </div>

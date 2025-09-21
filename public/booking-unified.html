@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rezervace</title>
+  <link rel="stylesheet" href="booking.css" />
+  <style>
+    /* Globally remove rounded corners inside this page */
+    * { border-radius: 0 !important; }
+    body{font-family:Arial,Helvetica,sans-serif;background:#f7f7f7;padding:20px}
+    .wizard{max-width:900px;margin:0 auto;background:#fff;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+    .step{display:none}
+    .step.active{display:block}
+    .step-buttons{margin-top:16px;display:flex;gap:10px}
+    .room-card{border:1px solid #ccc;margin:10px 0;padding:10px;background:#fff;display:flex;gap:15px;align-items:center}
+    .room-card img{width:120px;height:80px;object-fit:cover}
+    .summary-list{margin:0 0 10px 0;padding:0}
+    .summary-list li{list-style:none;margin-bottom:5px}
+    /* Calendar container align with booking.html */
+    #calendar-container { margin-top: 8px; }
+    .label-inline { display:inline-block; margin-right:12px }
+    .divider { border-top:1px solid #eee; margin:12px 0 }
+  .type-choices{display:flex;gap:12px}
+  .choice-btn{flex:1;padding:12px;width:auto;cursor:pointer}
+  </style>
+</head>
+<body>
+  <form id="booking-unified-form" class="wizard">
+
+      <!-- Step 0: typ rezervace -->
+      <div class="step active" id="step-0">
+        <p>Zvolte typ rezervace:</p>
+        <div id="type-choices" class="type-choices">
+          <button type="button" id="choose-rooms" class="choice-btn">Ubytování (pokoje)</button>
+          <button type="button" id="choose-common" class="choice-btn">Společné prostory</button>
+        </div>
+      </div>
+
+      <!-- Step 1: datum / rozsah (unified visuals) -->
+      <div class="step" id="step-1">
+        <div id="unified-flow-1">
+          <p>Vyberte termín:</p>
+          <div id="calendar-container"></div>
+          <div id="selected-dates" style="margin:10px 0; color:#2196F3;"></div>
+        </div>
+
+        <div class="step-buttons">
+          <button type="button" id="back-to-0-1">Zpět</button>
+          <button type="button" id="to-step-2">Další</button>
+        </div>
+      </div>
+
+      <!-- Step 2: výběr pokojů + osoby (oboje typy) -->
+      <div class="step" id="step-2">
+        <div id="rooms-flow-2">
+          <div id="rooms-list"></div>
+          <div id="rooms-error" style="color:#b71c1c; display:none;">Vyberte alespoň jeden pokoj a vyplňte počet osob.</div>
+          <div id="order-summary-2"></div>
+        </div>
+
+        <div id="common-flow-2" style="display:none">
+          <div id="common-rooms-list"></div>
+          <div id="common-rooms-error" style="color:#b71c1c; display:none;">Vyberte alespoň jednu místnost a vyplňte počet osob.</div>
+          <div id="order-summary-2-common"></div>
+        </div>
+
+        <div class="step-buttons">
+          <button type="button" id="back-to-1">Zpět</button>
+          <button type="button" id="to-step-3">Další</button>
+        </div>
+      </div>
+
+      <!-- Step 3: služby (jen pokoje) / časy (common) -->
+      <div class="step" id="step-3">
+        <div id="rooms-flow-3">
+          <div id="services-list"></div>
+          <div id="order-summary-3"></div>
+        </div>
+
+        <div id="common-flow-3" style="display:none">
+          <p>Vyberte časový blok:</p>
+          <div id="slots" class="slots" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:8px"></div>
+          <div id="slots-error" class="meta" style="display:none;color:#b71c1c">Vyberte alespoň jeden časový blok.</div>
+          <div id="order-summary-3-common"></div>
+        </div>
+
+        <div class="step-buttons">
+          <button type="button" id="back-to-2">Zpět</button>
+          <button type="button" id="to-step-4">Další</button>
+        </div>
+      </div>
+
+      <!-- Step 4: kontakty + odeslání -->
+      <div class="step" id="step-4">
+        <h3>Přehled rezervace</h3>
+        <ul class="summary-list" id="summary-list"></ul>
+        <p><strong>Celková cena: <span id="total-price">0</span> Kč</strong></p>
+        <label>Jméno:<br>
+          <input type="text" id="name" required>
+        </label><br>
+        <label>Email:<br>
+          <input type="email" id="email" required>
+        </label><br>
+        <label>Telefon:<br>
+          <input type="tel" id="phone" required>
+        </label><br>
+        <div class="step-buttons">
+          <button type="button" id="back-to-3">Zpět</button>
+          <button type="submit" id="submit-btn">Rezervovat</button>
+        </div>
+      </div>
+
+  </form>
+
+  <!-- Shared Photo Modal (reuse same IDs as booking.html) -->
+  <div id="photo-modal" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);align-items:center;justify-content:center">
+    <span id="photo-modal-close" style="position:absolute;top:30px;right:40px;font-size:2.5rem;color:#fff;cursor:pointer">&times;</span>
+    <img id="photo-modal-img" src="" style="max-width:90vw;max-height:80vh;box-shadow:0 4px 32px #000">
+    <div id="photo-modal-nav" style="margin-top:20px;text-align:center">
+      <button id="photo-prev">&#8592;</button>
+      <button id="photo-next">&#8594;</button>
+    </div>
+  </div>
+
+  <script src="calendar.js"></script>
+  <script src="booking-unified.js"></script>
+</body>
+</html>

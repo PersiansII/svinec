@@ -1,25 +1,143 @@
 /*
-  Adjusted to support:
-  - multiple room checkboxes in step 1
-  - inline calendar widget in step 1 (click day -> fills date input)
-  - slot disabling requires EVERY selected room to be free (we disable if ANY selected room is booked)
+  Step 1 redesigned to match unified calendar visuals
+  - Multiple room checkboxes
+  - Unified calendar (green/yellow/orange/red) with left/right nav
+  - Red date warning + disable Next until valid date is chosen
 */
 let commonRooms = [];
 let commonBookings = []; // combined confirmed + pending for disabling
 let selectedRoomIds = []; // array of selected room ids
+let peoplePerRoom = {}; // id -> count
 let selectedDate = null;
 const SLOT_STARTS = [6,9,12,15,18,21]; // hours
 
-// small calendar state
-let calDate = new Date(); // current month shown
+// calendar state (unified)
+let calDate = new Date();
 
 showStep(0);
+
+// --- Sticky footer helpers (summary + gating) ---
+function formatCzDate(iso){
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+function currentSelectedSlots(){
+  return Array.from(document.querySelectorAll('#slots input[type="checkbox"]:not(:disabled)'))
+    .filter(i => i.checked)
+    .map(i => parseInt(i.dataset.idx,10))
+    .sort((a,b)=>a-b);
+}
+
+function priceForCommonSelection(){
+  // price = sum of selected rooms' price per selected slot
+  if (!selectedRoomIds.length) return 0;
+  const selectedSlots = currentSelectedSlots();
+  const slotsCount = selectedSlots.length || 0;
+  const sumRoomPrices = selectedRoomIds.reduce((sum,id)=>{
+    const r = commonRooms.find(x => String(x.id)===String(id));
+    return sum + Number(r && r.price ? r.price : 0);
+  }, 0);
+  return Math.max(0, sumRoomPrices * slotsCount);
+}
+
+function renderFooterSummaryCommon(stepIndex){
+  const cont = document.getElementById('footer-summary');
+  if (!cont) return;
+  // Items: Date, Rooms chosen, Timeslot(s), Price
+  const dateStr = formatCzDate(selectedDate);
+  const roomsStr = selectedRoomIds.map(id => {
+    const r = commonRooms.find(x => String(x.id)===String(id));
+    return r ? r.name : id;
+  }).join(', ') || '-';
+
+  // Prepare timeslot labels from SLOTS and currently checked inputs
+  const slotIdxs = currentSelectedSlots();
+  const slotLabels = slotIdxs.map(i => (SLOTS[i] ? SLOTS[i].label : i)).join(', ') || '-';
+  const price = priceForCommonSelection();
+
+  cont.innerHTML = `
+    <div class="footer-chip"><strong>Datum:</strong> ${dateStr}</div>
+    <div class="footer-chip"><strong>Místnosti:</strong> ${roomsStr}</div>
+    <div class="footer-chip"><strong>Čas:</strong> ${slotLabels}</div>
+    <div class="footer-chip"><strong>Cena:</strong> ${price} Kč</div>
+  `;
+}
+
+function updateFooterForStepCommon(stepIdx){
+  const backBtn = document.getElementById('footer-back');
+  const nextBtn = document.getElementById('footer-next');
+  const submitBtn = document.getElementById('footer-submit');
+  if (!backBtn || !nextBtn || !submitBtn) return;
+  backBtn.style.display = stepIdx === 0 ? 'none' : '';
+  nextBtn.style.display = (stepIdx === 3) ? 'none' : '';
+  submitBtn.style.display = (stepIdx === 3) ? '' : 'none';
+
+  if (stepIdx === 0) {
+    // valid single date selected
+    nextBtn.disabled = !selectedDate;
+  } else if (stepIdx === 1) {
+    const ok = selectedRoomIds.length>0 && selectedRoomIds.every(id => (peoplePerRoom[id]||0) >= 1);
+    nextBtn.disabled = !ok;
+  } else if (stepIdx === 2) {
+    // require at least one slot
+    nextBtn.disabled = currentSelectedSlots().length === 0;
+  } else if (stepIdx === 3) {
+    const name = document.getElementById('name')?.value?.trim();
+    const email = document.getElementById('email')?.value?.trim();
+    submitBtn.disabled = !(name && email);
+  }
+
+  renderFooterSummaryCommon(stepIdx);
+}
+
+// Footer nav (bind now and on DOM ready just in case)
+function bindFooterNav(){
+  const back = document.getElementById('footer-back');
+  const next = document.getElementById('footer-next');
+  const submit = document.getElementById('footer-submit');
+  if (back && !back._bound){
+    back.addEventListener('click', () => {
+      if (document.getElementById('step-4')?.classList.contains('active')) return document.getElementById('back-to-3').click();
+      if (document.getElementById('step-3')?.classList.contains('active')) return document.getElementById('back-to-2').click();
+      if (document.getElementById('step-2')?.classList.contains('active')) return document.getElementById('back-to-1').click();
+    });
+    back._bound = true;
+  }
+  if (next && !next._bound){
+    next.addEventListener('click', () => {
+      if (document.getElementById('step-1')?.classList.contains('active')) return document.getElementById('to-step-2').click();
+      if (document.getElementById('step-2')?.classList.contains('active')) return document.getElementById('to-step-3').click();
+      if (document.getElementById('step-3')?.classList.contains('active')) return document.getElementById('to-step-4').click();
+    });
+    next._bound = true;
+  }
+  if (submit && !submit._bound){
+    submit.addEventListener('click', () => {
+      document.getElementById('submit-booking')?.click();
+    });
+    submit._bound = true;
+  }
+}
+bindFooterNav();
+document.addEventListener('DOMContentLoaded', bindFooterNav);
+
+// Keep footer submit enablement live on Step 4 inputs
+['name','email','phone'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => updateFooterForStepCommon(3));
+});
 
 // load rooms & bookings
 async function loadCommonRooms() {
   const res = await fetch('/api/common-rooms');
   commonRooms = await res.json();
-  renderRoomCheckboxes();
+  // Step 2 will render cards instead of checkboxes
 }
 
 async function loadCommonBookings() {
@@ -33,48 +151,103 @@ async function loadCommonBookings() {
   commonBookings = [...(confirmed || []), ...(pending || [])];
 }
 
-function renderRoomCheckboxes() {
-  const container = document.getElementById('rooms-checkboxes');
+function openPhotoModal(photos, idx){
+  const modal = document.getElementById('photo-modal');
+  const img = document.getElementById('photo-modal-img');
+  let current = idx || 0;
+  if (!Array.isArray(photos) || !photos.length) return;
+  function show(i){ current = (i+photos.length)%photos.length; img.src = photos[current]; }
+  show(current);
+  modal.style.display = 'flex';
+  document.getElementById('photo-prev').onclick = () => show(current-1);
+  document.getElementById('photo-next').onclick = () => show(current+1);
+  document.getElementById('photo-modal-close').onclick = () => modal.style.display='none';
+  modal.onclick = (e) => { if (e.target && e.target.id==='photo-modal') modal.style.display='none'; };
+}
+
+function renderCommonRoomsStep(){
+  const container = document.getElementById('common-rooms-list');
+  if (!container) return;
   container.innerHTML = '';
-  commonRooms.forEach(r => {
-    const div = document.createElement('label');
-    div.style.display = 'flex';
-    div.style.alignItems = 'center';
-    div.style.gap = '8px';
-    div.innerHTML = `<input type="checkbox" class="room-cb" data-id="${r.id}" /> <div><strong>${r.name}</strong><div class="meta">Kapacita ${r.capacity}</div></div>`;
-    container.appendChild(div);
-  });
+  selectedRoomIds = [];
+  peoplePerRoom = {};
+  commonRooms.filter(r => {
+      const shown = (typeof r.showInCalendar==='undefined') ? true : !!r.showInCalendar;
+      const bookable = (typeof r.bookable==='undefined') ? true : !!r.bookable;
+      return shown && bookable;
+    })
+    .forEach(room => {
+      const photos = (room.photos||[]).map(p => `/images/common/${p}`);
+      const card = document.createElement('div');
+      card.className = 'common-room-card';
+      card.innerHTML = `
+        <div class="crc-main">
+          <img class="crc-image" src="${photos[0]||''}" alt="${room.name}">
+          <div class="crc-content">
+            <div class="crc-title">${room.name}</div>
+            <div class="crc-desc">${room.description||''}</div>
+            <div class="crc-stats">
+              <div class="crc-stat">Cena za blok: <strong>${room.price||0} Kč</strong></div>
+              <div class="crc-stat">Kapacita: <strong>${room.capacity||0}</strong></div>
+            </div>
+            <div class="crc-actions">
+              <label style="display:inline-flex;gap:8px;align-items:center">
+                <input type="checkbox" class="room-cb" data-id="${room.id}"> Vybrat
+              </label>
+              <div class="crc-people" data-id="${room.id}">
+                <label>Počet osob: <input type="number" min="1" max="${room.capacity||1}" value="1" class="people-input" data-id="${room.id}"></label>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      const imgEl = card.querySelector('.crc-image');
+      imgEl.addEventListener('click', () => openPhotoModal(photos, 0));
+      container.appendChild(card);
+    });
 
-  // click handlers to update selectedRoomIds
+  function updateNextEnabled(){
+    const btn = document.getElementById('to-step-3');
+    if (!btn) return;
+    const ok = selectedRoomIds.length>0 && selectedRoomIds.every(id => (peoplePerRoom[id]||0) >= 1);
+    btn.disabled = !ok;
+    updateFooterForStepCommon(1);
+  }
+
   container.querySelectorAll('.room-cb').forEach(cb => {
-    cb.addEventListener('change', () => {
-      selectedRoomIds = Array.from(document.querySelectorAll('.room-cb:checked')).map(i => {
-        const v = i.dataset.id;
-        return isNaN(Number(v)) ? v : Number(v);
-      });
+    cb.addEventListener('change', (e) => {
+      const idRaw = e.target.dataset.id;
+      const id = isNaN(Number(idRaw)) ? idRaw : Number(idRaw);
+      if (e.target.checked){
+        if (!selectedRoomIds.includes(id)) selectedRoomIds.push(id);
+  const ppl = container.querySelector(`.crc-people[data-id="${idRaw}"]`);
+  if (ppl) ppl.classList.add('show');
+        peoplePerRoom[id] = peoplePerRoom[id] || 1;
+      } else {
+        selectedRoomIds = selectedRoomIds.filter(x => x!==id);
+  const ppl = container.querySelector(`.crc-people[data-id="${idRaw}"]`);
+  if (ppl) ppl.classList.remove('show');
+        delete peoplePerRoom[id];
+      }
+      updateNextEnabled();
+      renderFooterSummaryCommon(1);
     });
   });
 
-  // preselect from URL if present
-  const url = new URL(window.location.href);
-  const roomQ = url.searchParams.get('room');
-  const dateQ = url.searchParams.get('date');
-  if (roomQ) {
-    // allow comma-separated or single id
-    const ids = roomQ.split(',').map(s => s.trim());
-    ids.forEach(id => {
-      const cb = container.querySelector(`.room-cb[data-id="${id}"], .room-cb[data-id="${Number(id)}"]`);
-      if (cb) cb.checked = true;
+  container.querySelectorAll('.people-input').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idRaw = e.target.dataset.id;
+      const id = isNaN(Number(idRaw)) ? idRaw : Number(idRaw);
+      const room = commonRooms.find(r => String(r.id)===String(idRaw));
+      const max = (room && room.capacity) || 1;
+      const val = Math.max(1, Math.min(max, parseInt(e.target.value||'1',10)));
+      e.target.value = val;
+      peoplePerRoom[id] = val;
+      updateNextEnabled();
+      renderFooterSummaryCommon(1);
     });
-    // update selectedRoomIds
-    selectedRoomIds = Array.from(container.querySelectorAll('.room-cb:checked')).map(i => {
-      const v = i.dataset.id; return isNaN(Number(v)) ? v : Number(v);
-    });
-  }
-  if (dateQ) {
-    document.getElementById('date').value = dateQ;
-    selectedDate = dateQ;
-  }
+  });
+
+  updateNextEnabled();
 }
 
 // helper: map percent -> occupancy class (reuse same buckets)
@@ -105,173 +278,107 @@ function bookingCoversNight(booking, D) {
   return S.getTime() <= D.getTime() && E.getTime() > D.getTime();
 }
 
-// calendar rendering (simple)
-async function renderCalendar() {
-  const monthEl = document.getElementById('cal-month');
-  const grid = document.getElementById('cal-grid');
-  grid.innerHTML = '';
-  const year = calDate.getFullYear();
-  const month = calDate.getMonth();
+// Unified calendar rendering for common rooms
+async function renderUnifiedCommonCalendar(){
+  const container = document.getElementById('calendar-container');
+  const selInfo = document.getElementById('selected-dates');
+  if (!container) return;
+  container.innerHTML = '';
+  if (selInfo) selInfo.textContent = '';
 
-  // fetch confirmed common bookings to compute occupancy
-  let confirmedCommon = [];
-  try {
-    const res = await fetch('/api/common-bookings/confirmed');
-    confirmedCommon = await res.json().catch(()=>[]);
-  } catch (e) {
-    confirmedCommon = [];
-  }
+  // header table like unified
+  const table = document.createElement('table'); table.className = 'calendar-table';
+  const thead = document.createElement('thead'); const header = document.createElement('tr');
+  const thPrev = document.createElement('th'); const thLabel = document.createElement('th'); thLabel.colSpan = 5; const thNext = document.createElement('th');
+  const prevBtn = document.createElement('button'); prevBtn.type='button'; prevBtn.textContent = '‹';
+  const nextBtn = document.createElement('button'); nextBtn.type='button'; nextBtn.textContent = '›';
+  const labelSpan = document.createElement('span'); labelSpan.style.margin='0 8px';
+  thPrev.appendChild(prevBtn); thLabel.appendChild(labelSpan); thNext.appendChild(nextBtn);
+  header.appendChild(thPrev); header.appendChild(thLabel); header.appendChild(thNext);
+  thead.appendChild(header);
+  const days = document.createElement('tr'); ['Po','Út','St','Čt','Pá','So','Ne'].forEach(d => { const th=document.createElement('th'); th.textContent=d; days.appendChild(th); });
+  thead.appendChild(days); table.appendChild(thead);
+  const tbody = document.createElement('tbody'); table.appendChild(tbody); container.appendChild(table);
 
-  const monthName = calDate.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
-  monthEl.textContent = monthName;
-
-  // helper to show/hide warning near the date input
-  function showDateWarning(msg) {
-    const dateEl = document.getElementById('date');
-    if (!dateEl) return;
-    let w = document.getElementById('date-warning-common');
-    if (!w) {
-      w = document.createElement('div');
-      w.id = 'date-warning-common';
-      w.style.marginTop = '8px';
-      w.style.padding = '8px';
-      w.style.borderRadius = '6px';
-      w.style.background = '#ffe6e6';
-      w.style.color = '#7a0000';
-      w.style.fontWeight = '600';
-      w.style.border = '1px solid #ff9b9b';
-      dateEl.parentNode.insertBefore(w, dateEl.nextSibling);
+  // warning helper (matching unified)
+  function ensureWarning(){
+    let w = document.getElementById('date-warning-calendar');
+    if (!w){
+      const sel = document.getElementById('selected-dates');
+      if (!sel || !sel.parentNode) return null;
+      w = document.createElement('div'); w.id='date-warning-calendar'; w.style.marginTop='8px'; w.style.padding='8px'; w.style.background='#ffe6e6'; w.style.color='#7a0000'; w.style.fontWeight='600'; w.style.border='1px solid #ff9b9b';
+      sel.parentNode.insertBefore(w, sel.nextSibling);
     }
-    w.textContent = msg;
-    w.style.display = 'block';
+    return w;
   }
-  function hideDateWarning() {
-    const w = document.getElementById('date-warning-common');
-    if (w) w.style.display = 'none';
-  }
+  function setNextEnabled(enabled){ const btn=document.getElementById('to-step-2'); if (btn) btn.disabled=!enabled; }
+  function showHideWarning(pct){ const w=ensureWarning(); if (!w) return; if (pct>=100){ w.textContent='Jejda! V tohle datum je už chata plná. Zkuste prosím jiné datum.'; w.style.display='block'; } else { w.style.display='none'; } }
 
-  const dayNames = ['Po','Út','St','Čt','Pá','So','Ne'];
-  dayNames.forEach(d => {
-    const hd = document.createElement('div');
-    hd.className = 'cal-day header';
-    hd.textContent = d;
-    grid.appendChild(hd);
-  });
-
-  // first day index (Monday=0)
-  const first = new Date(year, month, 1);
-  const startDay = (first.getDay() + 6) % 7; // shift Sun->6
-  const daysInMonth = new Date(year, month+1, 0).getDate();
-
-  // fill blanks
-  for (let i=0;i<startDay;i++) {
-    const blank = document.createElement('div');
-    blank.className = 'cal-day disabled';
-    grid.appendChild(blank);
-  }
+  // fetch confirmed for occupancy
+  let confirmedCommon = [];
+  try { const res = await fetch('/api/common-bookings/confirmed'); confirmedCommon = await res.json().catch(()=>[]); } catch(e){ confirmedCommon = []; }
 
   const today = new Date(); today.setHours(0,0,0,0);
+  const visibleCommon = (commonRooms||[]).filter(r => typeof r.showInCalendar==='undefined' ? true : !!r.showInCalendar);
+  const totalCommon = visibleCommon.length || 1;
 
-  // visible common rooms respecting showInCalendar
-  const visibleCommon = (commonRooms || []).filter(r => typeof r.showInCalendar === 'undefined' ? true : Boolean(r.showInCalendar));
-  const totalCommonCount = visibleCommon.length;
+  function bookingCoversNight(b, D){ const S=b.start||b.startDate||b.startDateTime; const E=b.end||b.endDate||b.endDateTime; if(!S||!E) return false; const s=new Date(S); s.setHours(0,0,0,0); const e=new Date(E); e.setHours(0,0,0,0); return s.getTime()<=D.getTime() && e.getTime()>D.getTime(); }
 
-  for (let d=1; d<=daysInMonth; d++) {
-    const dt = new Date(year, month, d);
-    dt.setHours(0,0,0,0);
-    const cell = document.createElement('div');
-    cell.className = 'cal-day';
-    cell.textContent = d;
-    // build local YYYY-MM-DD to avoid timezone shifts from toISOString()
-    const y2 = dt.getFullYear();
-    const m2 = String(dt.getMonth() + 1).padStart(2, '0');
-    const day2 = String(dt.getDate()).padStart(2, '0');
-    const iso = `${y2}-${m2}-${day2}`;
-    cell.dataset.date = iso;
-    if (dt.getTime() === today.getTime()) cell.classList.add('today');
-    const selected = document.getElementById('date').value;
-    if (selected === iso) cell.classList.add('selected');
+  function paint(){
+    labelSpan.textContent = calDate.toLocaleDateString('cs-CZ',{month:'long',year:'numeric'});
+    tbody.innerHTML='';
+    const year = calDate.getFullYear(); const month = calDate.getMonth();
+    const first = new Date(year, month, 1); const startDay = (first.getDay()+6)%7; const daysInMonth = new Date(year, month+1, 0).getDate();
+    let row = document.createElement('tr'); for(let i=0;i<startDay;i++){ const td=document.createElement('td'); td.style.opacity='0.4'; td.style.cursor='default'; row.appendChild(td); }
+    for(let d=1; d<=daysInMonth; d++){
+      if (row.children.length===7){ tbody.appendChild(row); row=document.createElement('tr'); }
+      const dt = new Date(year, month, d); dt.setHours(0,0,0,0);
+      const td = document.createElement('td'); td.textContent = d;
+      // occupancy coloring
+      const used = new Set(); confirmedCommon.forEach(b => { if (bookingCoversNight(b, dt)){ (b.rooms||[]).forEach(r => used.add(String(r))); }});
+      const pct = Math.min(100, Math.round((used.size/totalCommon)*100));
+      if (pct>=100) { td.style.background='#e74c3c'; td.style.color='#ffffff'; }
+      else if (pct>60) { td.style.background='#e67e22'; td.style.color='#ffffff'; }
+      else if (pct>30) { td.style.background='#f1c40f'; td.style.color='#111111'; }
+      else if (pct>0) { td.style.background='#fff8c2'; td.style.color='#111111'; }
+      else { td.style.background='#2ecc71'; td.style.color='#ffffff'; }
+      if (dt.getTime()===today.getTime()) td.classList.add('today');
+      if (dt < today) { td.style.opacity=0.5; td.style.pointerEvents='none'; }
 
-    // compute occupancy percent for common rooms on this date (confirmed only)
-    let bookedCommonCount = 0;
-    if (totalCommonCount > 0) {
-      visibleCommon.forEach(c => {
-        const isBooked = (confirmedCommon || []).some(b => {
-          if (!(b.rooms || []).includes(c.id) && !(b.rooms || []).includes(String(c.id))) return false;
-          return bookingCoversNight(b, dt);
-        });
-        if (isBooked) bookedCommonCount++;
+      td.addEventListener('click', () => {
+        const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        document.getElementById('date').value = iso;
+        selectedDate = iso;
+        const disp = `${String(d).padStart(2,'0')}-${String(month+1).padStart(2,'0')}-${year}`;
+        if (selInfo) selInfo.textContent = `Vybrané datum: ${disp}`;
+        tbody.querySelectorAll('td').forEach(c => c.classList.remove('selected'));
+        td.classList.add('selected');
+        showHideWarning(pct);
+        setNextEnabled(pct < 100);
+        renderFooterSummaryCommon(0);
+        updateFooterForStepCommon(0);
       });
+
+      row.appendChild(td);
     }
-    const percent = totalCommonCount ? Math.min(100, Math.round((bookedCommonCount / totalCommonCount) * 100)) : 0;
-
-    // attach percent to DOM for later checks and apply class/colors
-    cell.dataset.percent = String(percent);
-    cell.classList.remove('occ-0','occ-1-30','occ-31-60','occ-61-99','occ-100');
-    cell.classList.add(occupancyClass(percent));
-    const col = (function(p){
-      if (p === 0) return { bg:'#2ecc71', color:'#fff' };
-      if (p > 0 && p <= 30) return { bg:'#fff8c2', color:'#111' };
-      if (p > 30 && p <= 60) return { bg:'#f1c40f', color:'#111' };
-      if (p > 60 && p < 100) return { bg:'#e67e22', color:'#fff' };
-      return { bg:'#e74c3c', color:'#fff' };
-    })(percent);
-    cell.style.background = col.bg;
-    cell.style.color = col.color;
-
-    cell.addEventListener('click', () => {
-      document.getElementById('date').value = iso;
-      selectedDate = iso;
-      // refresh selected visuals
-      grid.querySelectorAll('.cal-day.selected').forEach(x => x.classList.remove('selected'));
-      cell.classList.add('selected');
-
-      // Show warning immediately if this date is fully booked
-      if (Number(cell.dataset.percent) === 100) {
-        showDateWarning('Jejda! V tohle datum je už chata plná. Zkuste prosím jiné datum.');
-      } else {
-        hideDateWarning();
-      }
-    });
-
-    grid.appendChild(cell);
+    while (row.children.length < 7){ const td=document.createElement('td'); td.style.opacity='0.4'; td.style.cursor='default'; row.appendChild(td); }
+    tbody.appendChild(row);
   }
 
-  // After building the calendar, if a date is already selected (e.g. from input), show/hide warning accordingly
-  const sel = document.getElementById('date').value;
-  if (sel) {
-    const selectedCell = grid.querySelector(`.cal-day[data-date="${sel}"]`);
-    if (selectedCell) {
-      if (Number(selectedCell.dataset.percent) === 100) {
-        showDateWarning('Jejda! V tohle datum je už chata plná. Zkuste prosím jiné datum.');
-      } else {
-        hideDateWarning();
-      }
-    } else {
-      hideDateWarning();
-    }
-  } else {
-    hideDateWarning();
-  }
+  prevBtn.addEventListener('click', () => { calDate.setMonth(calDate.getMonth()-1); paint(); });
+  nextBtn.addEventListener('click', () => { calDate.setMonth(calDate.getMonth()+1); paint(); });
+  paint();
+  // initial gating
+  setNextEnabled(!!selectedDate);
+  updateFooterForStepCommon(0);
 }
-
-document.getElementById('cal-prev').addEventListener('click', () => { calDate.setMonth(calDate.getMonth()-1); renderCalendar(); });
-document.getElementById('cal-next').addEventListener('click', () => { calDate.setMonth(calDate.getMonth()+1); renderCalendar(); });
-document.getElementById('date').addEventListener('change', (e) => {
-  selectedDate = e.target.value;
-  // if changed externally, update calendar selection month
-  if (selectedDate) {
-    const [y,m,day] = selectedDate.split('-').map(Number);
-    calDate = new Date(y, m-1, 1);
-    renderCalendar();
-  }
-});
 
 // helpers from previous file
 function showStep(n) {
   document.querySelectorAll('.step').forEach((el, i) => {
     el.classList.toggle('active', i === n);
   });
+  updateFooterForStepCommon(n);
 }
 
 function toISODateTime(dateStr, hour) {
@@ -338,50 +445,59 @@ function renderSlots() {
     `;
     container.appendChild(slot);
   });
+  // bind change listeners to update footer summary and gating
+  container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      updateFooterForStepCommon(2);
+      renderFooterSummaryCommon(2);
+    });
+  });
 }
 
 // navigation and form handlers
-document.getElementById('to-step-2').onclick = async function() {
-  // ensure at least one room + date chosen
-  selectedRoomIds = Array.from(document.querySelectorAll('.room-cb:checked')).map(i => {
-    const v = i.dataset.id; return isNaN(Number(v)) ? v : Number(v);
-  });
+document.getElementById('to-step-2').onclick = async function(){
+  // require date selection only
   const date = document.getElementById('date').value;
-  if (!selectedRoomIds.length) { alert('Vyberte prosím alespoň jednu místnost.'); return; }
   if (!date) { alert('Vyberte prosím datum.'); return; }
-
-  await loadCommonBookings();
-  renderSlots();
+  if (!commonRooms || !commonRooms.length) { try { await loadCommonRooms(); } catch(e){} }
+  renderCommonRoomsStep();
   showStep(1);
+  renderFooterSummaryCommon(1);
 };
 
 document.getElementById('back-to-1').onclick = function() { showStep(0); };
 
-document.getElementById('to-step-3').onclick = function() {
+document.getElementById('to-step-3').onclick = async function() {
+  if (!selectedRoomIds.length) { document.getElementById('common-rooms-error').style.display='block'; return; }
+  document.getElementById('common-rooms-error').style.display='none';
+  await loadCommonBookings();
   const checked = Array.from(document.querySelectorAll('#slots input[type="checkbox"]:not(:disabled)'))
     .filter(i => i.checked)
     .map(i => parseInt(i.dataset.idx,10));
-  if (!checked.length) {
-    document.getElementById('slots-error').style.display = 'block';
-    return;
-  }
-  document.getElementById('slots-error').style.display = 'none';
+  renderSlots();
   showStep(2);
+  renderFooterSummaryCommon(2);
 };
 
 document.getElementById('back-to-2').onclick = function() { showStep(1); };
 
+document.getElementById('to-step-4').onclick = function(){
+  const checked = Array.from(document.querySelectorAll('#slots input[type="checkbox"]:not(:disabled)')).filter(i=>i.checked);
+  if (!checked.length){ document.getElementById('slots-error').style.display='block'; return; }
+  document.getElementById('slots-error').style.display='none';
+  showStep(3);
+  renderFooterSummaryCommon(3);
+};
+
+document.getElementById('back-to-3').onclick = function(){ showStep(2); };
+
 document.getElementById('submit-booking').onclick = async function() {
-  const people = parseInt(document.getElementById('people').value, 10) || 0;
   const name = document.getElementById('name').value.trim();
   const email = document.getElementById('email').value.trim();
   const phone = document.getElementById('phone').value.trim();
   const date = document.getElementById('date').value;
-
-  if (!people || !name || !email) {
-    alert('Vyplňte počet osob, jméno a email.');
-    return;
-  }
+  if (!name || !email) { alert('Vyplňte jméno a email.'); return; }
+  updateFooterForStepCommon(3);
 
   // collect selected slot indices
   const selected = Array.from(document.querySelectorAll('#slots input[type="checkbox"]'))
@@ -405,8 +521,8 @@ document.getElementById('submit-booking').onclick = async function() {
   const groups = group(selected);
 
   const results = [];
-  // payload rooms: selectedRoomIds
   const roomsPayload = selectedRoomIds.map(r => (isNaN(Number(r)) ? r : Number(r)));
+  const totalPeople = selectedRoomIds.reduce((sum,id)=> sum + (peoplePerRoom[id]||0), 0);
 
   for (const [sIdx, eIdx] of groups) {
     const startHour = SLOTS[sIdx].start;
@@ -417,7 +533,7 @@ document.getElementById('submit-booking').onclick = async function() {
       start: startISO,
       end: endISO,
       rooms: roomsPayload,
-      people,
+      people: totalPeople,
       name,
       email,
       phone
@@ -448,4 +564,5 @@ document.getElementById('submit-booking').onclick = async function() {
 
 // Init: populate room checkboxes and calendar
 loadCommonRooms();
-renderCalendar();
+renderUnifiedCommonCalendar();
+renderFooterSummaryCommon(0);

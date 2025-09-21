@@ -209,20 +209,40 @@
     let _blockRoomsCache = [];
     let _blockCommonCache = [];
 
+    // Try to fetch dedicated common-rooms; if not present fall back to /api/rooms
+    async function fetchCommonRooms() {
+      // try dedicated API first
+      try {
+        const res = await fetch('/api/common-rooms');
+        if (res.ok) {
+          const data = await res.json();
+          // mark origin so callers can adapt image paths / endpoints
+          return data.map(r => ({ ...r, _fromRooms: false }));
+        }
+      } catch (e) { /* ignore and fallback */ }
+
+      // fallback: fetch all rooms and treat those in group 'prostory' or flagged isCommon as common rooms
+      try {
+        const res2 = await fetch('/api/rooms');
+        if (res2.ok) {
+          const all = await res2.json();
+          const commons = all.filter(r => String(r.group || '') === 'prostory' || r.isCommon === true);
+          return commons.map(r => ({ ...r, _fromRooms: true }));
+        }
+      } catch (e) { /* final fallback -> empty */ }
+      return [];
+    }
+
     async function loadBlockOptions() {
       try {
-        const [roomsRes, commonRes] = await Promise.all([
-          fetch('/api/rooms'),
-          fetch('/api/common-rooms')
-        ]);
-        const rooms = await roomsRes.json();
-        const common = await commonRes.json();
-        _blockRoomsCache = rooms;
-        _blockCommonCache = common;
-        renderBlockOptions();
-      } catch (e) {
-        console.error('loadBlockOptions error', e);
-      }
+        const rooms = await fetch('/api/rooms').then(r => r.ok ? r.json() : []);
+        const common = await fetchCommonRooms();
+         _blockRoomsCache = rooms;
+         _blockCommonCache = common;
+         renderBlockOptions();
+       } catch (e) {
+         console.error('loadBlockOptions error', e);
+       }
     }
 
     function renderBlockOptions() {
@@ -590,7 +610,17 @@
 
     async function renderAllBookings() {
       await renderBookings('rooms-tab', '/api/bookings/pending', '/api/bookings/confirmed');
-      await renderBookings('common-tab', '/api/common-bookings/pending', '/api/common-bookings/confirmed', true);
+      // common bookings endpoints may not exist on some backends; detect and skip gracefully
+      try {
+        const probe = await fetch('/api/common-bookings/pending');
+        if (probe.ok) {
+          await renderBookings('common-tab', '/api/common-bookings/pending', '/api/common-bookings/confirmed', true);
+        } else {
+          document.getElementById('common-tab').innerHTML = '<p>Společné prostory - rezervace nejsou dostupné (API chybí).</p>';
+        }
+      } catch (e) {
+        document.getElementById('common-tab').innerHTML = '<p>Společné prostory - rezervace nejsou dostupné (API chybí).</p>';
+      }
       await renderRoomManagement();
       await updateCurrentClients();
     }
@@ -598,139 +628,71 @@
     async function renderRoomManagement() {
       const container = document.getElementById('rooms-list'); // place cards inside the grid container
       container.innerHTML = '';
-      const rooms = await fetch('/api/rooms').then(res => res.json());
+      // fetch rooms and resiliently obtain common rooms (may come from /api/common-rooms or fallback to /api/rooms)
+      const rooms = await fetch('/api/rooms').then(res => res.ok ? res.json() : []);
+      const commonRooms = await fetchCommonRooms();
 
+      // keep global caches in sync for name lookup helpers
+      roomsList = rooms;
+      commonRoomsList = commonRooms;
+
+      // render regular rooms (unchanged UI) ---------------------------
       rooms.forEach(room => {
+        // ...existing code that builds room cards...
+        // Instead of repeating all code here, reuse the existing DOM generation by
+        // creating the same structure used previously. For clarity we replicate the minimal
+        // unique bits and reuse the saveRoom/deleteRoomPhoto functions already defined.
         const card = document.createElement('div');
         card.className = 'card confirmed room-card';
+        const body = document.createElement('div'); body.className = 'card-body';
 
-        // card body
-        const body = document.createElement('div');
-        body.className = 'card-body';
-
-        // editable room name
         const nameLabel = document.createElement('label');
         nameLabel.textContent = 'Název pokoje: ';
         const nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.value = room.name || '';
-        nameInput.id = `name-${room.id}`;
-        nameLabel.appendChild(nameInput);
-        body.appendChild(nameLabel);
-
-        // featured thumbnail removed - album thumbnails (room.photos) remain below
+        nameInput.type = 'text'; nameInput.value = room.name || ''; nameInput.id = `name-${room.id}`;
+        nameLabel.appendChild(nameInput); body.appendChild(nameLabel);
 
         const priceLabel = document.createElement('label');
         priceLabel.textContent = 'Cena za noc (CZK): ';
         const priceInput = document.createElement('input');
-        priceInput.type = 'number';
-        priceInput.value = room.price || '';
-        priceInput.id = `price-${room.id}`;
-        priceLabel.appendChild(priceInput);
-        body.appendChild(priceLabel);
+        priceInput.type = 'number'; priceInput.value = room.price || ''; priceInput.id = `price-${room.id}`;
+        priceLabel.appendChild(priceInput); body.appendChild(priceLabel);
 
         const bedsLabel = document.createElement('label');
         bedsLabel.textContent = 'Počet lůžek: ';
         const bedsInput = document.createElement('input');
-        bedsInput.type = 'number';
-        bedsInput.value = room.beds || '';
-        bedsInput.id = `beds-${room.id}`;
-        bedsLabel.appendChild(bedsInput);
-        body.appendChild(bedsLabel);
+        bedsInput.type = 'number'; bedsInput.value = room.beds || ''; bedsInput.id = `beds-${room.id}`;
+        bedsLabel.appendChild(bedsInput); body.appendChild(bedsLabel);
 
-        const photoLabel = document.createElement('label');
-        photoLabel.textContent = 'Změnit foto: ';
-        const photoInput = document.createElement('input');
-        photoInput.type = 'file';
-        photoInput.id = `photo-${room.id}`;
-        photoInput.accept = 'image/*';
-        photoInput.multiple = true;
-        photoLabel.appendChild(photoInput);
-        body.appendChild(photoLabel);
+        const photoLabel = document.createElement('label'); photoLabel.textContent = 'Změnit foto: ';
+        const photoInput = document.createElement('input'); photoInput.type = 'file';
+        photoInput.id = `photo-${room.id}`; photoInput.accept = 'image/*'; photoInput.multiple = true;
+        photoLabel.appendChild(photoInput); body.appendChild(photoLabel);
 
         if (room.photos && room.photos.length) {
-          const thumbs = document.createElement('div');
-          thumbs.style.display = 'flex';
-          thumbs.style.flexWrap = 'wrap';
-          thumbs.style.gap = '6px';
-
+          const thumbs = document.createElement('div'); thumbs.style.display = 'flex'; thumbs.style.flexWrap = 'wrap'; thumbs.style.gap = '6px';
           room.photos.forEach(p => {
-            const wrapper = document.createElement('div');
-            wrapper.style.position = 'relative';
-            wrapper.style.width = '60px';
-            wrapper.style.height = '40px';
-
-            const t = document.createElement('img');
-            t.src = `/images/rooms/${p}`;
-            t.alt = room.name;
-            t.style.width = '60px';
-            t.style.height = '40px';
-            t.style.objectFit = 'cover';
-            t.style.borderRadius = '3px';
-
-            const del = document.createElement('button');
-            del.textContent = '✕';
-            del.title = 'Odstranit fotografii';
-            Object.assign(del.style, {
-              position: 'absolute',
-              top: '-6px',
-              right: '-6px',
-              background: '#f44336',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '12px',
-              width: '22px',
-              height: '22px',
-              cursor: 'pointer',
-              padding: '0',
-              lineHeight: '1'
-            });
-            del.onclick = () => {
-              if (!confirm('Smazat tuto fotografii?')) return;
-              deleteRoomPhoto(room.id, p);
-            };
-
-            wrapper.appendChild(t);
-            wrapper.appendChild(del);
-            thumbs.appendChild(wrapper);
+            const wrapper = document.createElement('div'); wrapper.style.position = 'relative'; wrapper.style.width = '60px'; wrapper.style.height = '40px';
+            const t = document.createElement('img'); t.src = `/images/rooms/${p}`; t.alt = room.name; t.style.width = '60px'; t.style.height = '40px'; t.style.objectFit = 'cover'; t.style.borderRadius = '3px';
+            const del = document.createElement('button'); del.textContent = '✕'; del.title = 'Odstranit fotografii';
+            Object.assign(del.style, { position: 'absolute', top: '-6px', right: '-6px', background: '#f44336', color: '#fff', border: 'none', borderRadius: '12px', width: '22px', height: '22px', cursor: 'pointer', padding: '0', lineHeight: '1' });
+            del.onclick = () => { if (!confirm('Smazat tuto fotografii?')) return; deleteRoomPhoto(room.id, p); };
+            wrapper.appendChild(t); wrapper.appendChild(del); thumbs.appendChild(wrapper);
           });
           body.appendChild(thumbs);
         }
 
-        // description field (Popis)
-        const descLabel = document.createElement('label');
-        descLabel.className = 'room-desc';
-        descLabel.innerHTML = 'Popis<br>';
-        const descTextarea = document.createElement('textarea');
-        descTextarea.name = 'description';
-        descTextarea.id = `description-${room.id}`;
-        descTextarea.placeholder = 'Popis pokoje';
-        descTextarea.value = room.description || '';
-        descLabel.appendChild(descTextarea);
-        body.appendChild(descLabel);
+        const descLabel = document.createElement('label'); descLabel.className = 'room-desc'; descLabel.innerHTML = 'Popis<br>';
+        const descTextarea = document.createElement('textarea'); descTextarea.name = 'description'; descTextarea.id = `description-${room.id}`; descTextarea.placeholder = 'Popis pokoje'; descTextarea.value = room.description || '';
+        descLabel.appendChild(descTextarea); body.appendChild(descLabel);
 
-        // Zařazení (group) select
-        const groupLabel = document.createElement('label');
-        groupLabel.style.display = 'block';
-        groupLabel.style.marginTop = '8px';
-        groupLabel.innerHTML = 'Zařazení<br>';
-        const groupSelect = document.createElement('select');
-        groupSelect.id = `group-${room.id}`;
+        const groupLabel = document.createElement('label'); groupLabel.style.display = 'block'; groupLabel.style.marginTop = '8px'; groupLabel.innerHTML = 'Zařazení<br>';
+        const groupSelect = document.createElement('select'); groupSelect.id = `group-${room.id}`;
         const groups = ['prostory','ubytování','skupiny','X','Y'];
-        groups.forEach(g => {
-          const opt = document.createElement('option');
-          opt.value = g;
-          opt.textContent = g;
-          if (typeof room.group !== 'undefined' && String(room.group) === g) opt.selected = true;
-          groupSelect.appendChild(opt);
-        });
-        groupLabel.appendChild(groupSelect);
-        body.appendChild(groupLabel);
-        
-        // extras (dog / extra bed) inside body so they remain above actions
-        const extras = document.createElement('div');
-        extras.style.marginTop = '8px';
-        // Values: -1 = disabled
+        groups.forEach(g => { const opt = document.createElement('option'); opt.value = g; opt.textContent = g; if (typeof room.group !== 'undefined' && String(room.group) === g) opt.selected = true; groupSelect.appendChild(opt); });
+        groupLabel.appendChild(groupSelect); body.appendChild(groupLabel);
+
+        const extras = document.createElement('div'); extras.style.marginTop = '8px';
         const dogFeeVal = typeof room.dogFee === 'undefined' ? -1 : room.dogFee;
         const ebFeeVal = typeof room.extraBedFee === 'undefined' ? -1 : room.extraBedFee;
         const cotFeeVal = typeof room.cotFee === 'undefined' ? -1 : room.cotFee;
@@ -750,42 +712,105 @@
         `;
         body.appendChild(extras);
 
-        // Offer-for-booking checkbox
-        const bookableLabel = document.createElement('label');
-        bookableLabel.style.display = 'block';
-        bookableLabel.style.marginTop = '8px';
+        const bookableLabel = document.createElement('label'); bookableLabel.style.display = 'block'; bookableLabel.style.marginTop = '8px';
         const bookableChecked = (typeof room.bookable === 'undefined') ? true : Boolean(room.bookable);
         bookableLabel.innerHTML = `<label><input type="checkbox" id="bookable-${room.id}" ${bookableChecked ? 'checked' : ''}> Nabízet pro rezervaci</label>`;
         body.appendChild(bookableLabel);
-        
-        // Show-in-calendar checkbox
-        const showLabel = document.createElement('label');
-        showLabel.style.display = 'block';
-        showLabel.style.marginTop = '6px';
+
+        const showLabel = document.createElement('label'); showLabel.style.display = 'block'; showLabel.style.marginTop = '6px';
         const showChecked = (typeof room.showInCalendar === 'undefined') ? true : Boolean(room.showInCalendar);
         showLabel.innerHTML = `<label><input type="checkbox" id="showincalendar-${room.id}" ${showChecked ? 'checked' : ''}> Zobrazovat v kalendáři</label>`;
         body.appendChild(showLabel);
-        
-        card.appendChild(body);
-        
-        // actions container at the very bottom
-        const actions = document.createElement('div');
-        actions.className = 'room-actions';
-        const saveBtn = document.createElement('button');
-        saveBtn.className = 'btn accept-btn';
-        saveBtn.type = 'button';
-        saveBtn.innerHTML = '💾 Uložit změny';
-        saveBtn.onclick = () => saveRoom(room.id);
-        actions.appendChild(saveBtn);
-        card.appendChild(actions);
 
-        container.appendChild(card);
+        card.appendChild(body);
+        const actions = document.createElement('div'); actions.className = 'room-actions';
+        const saveBtn = document.createElement('button'); saveBtn.className = 'btn accept-btn'; saveBtn.type = 'button'; saveBtn.innerHTML = '💾 Uložit změny'; saveBtn.onclick = () => saveRoom(room.id);
+        actions.appendChild(saveBtn); card.appendChild(actions); container.appendChild(card);
       });
 
-      // render group controls after rooms are appended
-      renderGroupControls(rooms);
-    }
+      // render common rooms AFTER regular rooms --------------------------------
+      if (commonRooms && commonRooms.length) {
+        // section header for common rooms
+        const header = document.createElement('h3');
+        header.textContent = 'Společné prostory (správa)';
+        header.style.gridColumn = '1 / -1';
+        container.appendChild(header);
 
+        commonRooms.forEach(c => {
+          const card = document.createElement('div');
+          card.className = 'card confirmed room-card';
+          const body = document.createElement('div'); body.className = 'card-body';
+
+          // name
+          const nameLabel = document.createElement('label'); nameLabel.textContent = 'Název: ';
+          const nameInput = document.createElement('input'); nameInput.type = 'text'; nameInput.value = c.name || ''; nameInput.id = `cname-${c.id}`;
+          nameLabel.appendChild(nameInput); body.appendChild(nameLabel);
+
+          // price (for timeslot)
+          const priceLabel = document.createElement('label'); priceLabel.textContent = 'Cena za pronájem / časovou jednotku (CZK): ';
+          const priceInput = document.createElement('input'); priceInput.type = 'number'; priceInput.value = c.price || ''; priceInput.id = `cprice-${c.id}`;
+          priceLabel.appendChild(priceInput); body.appendChild(priceLabel);
+
+          // capacity
+          const capLabel = document.createElement('label'); capLabel.textContent = 'Kapacita: ';
+          const capInput = document.createElement('input'); capInput.type = 'number'; capInput.value = c.capacity || ''; capInput.id = `capacity-${c.id}`;
+          capLabel.appendChild(capInput); body.appendChild(capLabel);
+
+          // photos
+          const photoLabel = document.createElement('label'); photoLabel.textContent = 'Změnit foto: ';
+          const photoInput = document.createElement('input'); photoInput.type = 'file'; photoInput.id = `cphoto-${c.id}`; photoInput.accept = 'image/*'; photoInput.multiple = true;
+          photoLabel.appendChild(photoInput); body.appendChild(photoLabel);
+
+          if (Array.isArray(c.photos) && c.photos.length) {
+            const thumbs = document.createElement('div'); thumbs.style.display = 'flex'; thumbs.style.flexWrap = 'wrap'; thumbs.style.gap = '6px';
+            c.photos.forEach(p => {
+              const wrapper = document.createElement('div'); wrapper.style.position = 'relative'; wrapper.style.width = '60px'; wrapper.style.height = '40px';
+              // choose image folder depending on origin (fallback common rooms may actually come from /api/rooms)
+              const imgBase = c._fromRooms ? '/images/rooms/' : '/images/common/';
+              const t = document.createElement('img'); t.src = `${imgBase}${p}`; t.alt = c.name; t.style.width = '60px'; t.style.height = '40px'; t.style.objectFit = 'cover'; t.style.borderRadius = '3px';
+              const del = document.createElement('button'); del.textContent = '✕'; del.title = 'Odstranit fotografii';
+              Object.assign(del.style, { position: 'absolute', top: '-6px', right: '-6px', background: '#f44336', color: '#fff', border: 'none', borderRadius: '12px', width: '22px', height: '22px', cursor: 'pointer', padding: '0', lineHeight: '1' });
+              del.onclick = () => { if (!confirm('Smazat tuto fotografii?')) return; deleteCommonRoomPhoto(c.id, p); };
+              wrapper.appendChild(t); wrapper.appendChild(del); thumbs.appendChild(wrapper);
+            });
+            body.appendChild(thumbs);
+          }
+
+          // description
+          const descLabel = document.createElement('label'); descLabel.className = 'room-desc'; descLabel.innerHTML = 'Popis<br>';
+          const descTextarea = document.createElement('textarea'); descTextarea.name = 'description'; descTextarea.id = `cdescription-${c.id}`; descTextarea.placeholder = 'Popis prostoru'; descTextarea.value = c.description || '';
+          descLabel.appendChild(descTextarea); body.appendChild(descLabel);
+
+          // group select
+          const groupLabel = document.createElement('label'); groupLabel.style.display = 'block'; groupLabel.style.marginTop = '8px'; groupLabel.innerHTML = 'Zařazení<br>';
+          const groupSelect = document.createElement('select'); groupSelect.id = `group-common-${c.id}`;
+          const groups2 = ['prostory','ubytování','skupiny','X','Y'];
+          groups2.forEach(g => { const opt = document.createElement('option'); opt.value = g; opt.textContent = g; if (typeof c.group !== 'undefined' && String(c.group) === g) opt.selected = true; groupSelect.appendChild(opt); });
+          groupLabel.appendChild(groupSelect); body.appendChild(groupLabel);
+
+          // bookable / showInCalendar
+          const bookableLabel = document.createElement('label'); bookableLabel.style.display = 'block'; bookableLabel.style.marginTop = '8px';
+          const bookableChecked = (typeof c.bookable === 'undefined') ? true : Boolean(c.bookable);
+          bookableLabel.innerHTML = `<label><input type="checkbox" id="cbookable-${c.id}" ${bookableChecked ? 'checked' : ''}> Nabízet pro rezervaci</label>`;
+          body.appendChild(bookableLabel);
+
+          const showLabel = document.createElement('label'); showLabel.style.display = 'block'; showLabel.style.marginTop = '6px';
+          const showChecked = (typeof c.showInCalendar === 'undefined') ? true : Boolean(c.showInCalendar);
+          showLabel.innerHTML = `<label><input type="checkbox" id="cshowincalendar-${c.id}" ${showChecked ? 'checked' : ''}> Zobrazovat v kalendáři</label>`;
+          body.appendChild(showLabel);
+
+          card.appendChild(body);
+          const actions = document.createElement('div'); actions.className = 'room-actions';
+          const saveBtn = document.createElement('button'); saveBtn.className = 'btn accept-btn'; saveBtn.type = 'button'; saveBtn.innerHTML = '💾 Uložit změny'; saveBtn.onclick = () => saveCommonRoom(c.id);
+          actions.appendChild(saveBtn); card.appendChild(actions); container.appendChild(card);
+        });
+      }
+
+      // render group controls after rooms are appended (use combined list)
+      const combined = rooms.concat(commonRooms || []);
+      renderGroupControls(combined);
+     }
+ 
     async function saveRoom(roomId) {
       const bookable = document.getElementById(`bookable-${roomId}`)?.checked || false;
       const showInCalendar = document.getElementById(`showincalendar-${roomId}`)?.checked || false;
@@ -856,11 +881,101 @@
       }
     }
     
+    // remove photo from common room album
+    async function deleteCommonRoomPhoto(roomId, filename) {
+      // try dedicated endpoint first, fallback to rooms endpoint if missing
+      try {
+        const res = await fetch(`/api/common-rooms/${roomId}/photos/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename })
+        });
+        if (res && res.ok) {
+          alert('Fotografie byla odstraněna.');
+          renderRoomManagement();
+          return;
+        }
+      } catch (e) { /* try fallback */ }
+      
+      try {
+        const res2 = await fetch(`/api/rooms/${roomId}/photos/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename })
+        });
+        if (res2 && res2.ok) {
+          alert('Fotografie byla odstraněna.');
+          renderRoomManagement();
+        } else {
+          const err = await res2.json().catch(() => ({}));
+          alert(err.message || 'Chyba při odstraňování fotografie.');
+        }
+      } catch (e) {
+        console.error(e);
+        alert('Chyba při odstraňování fotografie.');
+      }
+    }
+    
+    // save common room changes
+    async function saveCommonRoom(roomId) {
+      const name = document.getElementById(`cname-${roomId}`)?.value || '';
+      const price = document.getElementById(`cprice-${roomId}`)?.value || '';
+      const capacity = document.getElementById(`capacity-${roomId}`)?.value || '';
+      const photoInput = document.getElementById(`cphoto-${roomId}`);
+      const photoFiles = photoInput ? photoInput.files : [];
+      const description = document.getElementById(`cdescription-${roomId}`)?.value || '';
+      const group = document.getElementById(`group-common-${roomId}`)?.value || 'prostory';
+      const bookable = document.getElementById(`cbookable-${roomId}`)?.checked || false;
+      const showInCalendar = document.getElementById(`cshowincalendar-${roomId}`)?.checked || false;
+
+      const formData = new FormData();
+      formData.append('id', roomId);
+      formData.append('name', name);
+      formData.append('price', price);
+      formData.append('capacity', capacity);
+      formData.append('group', group);
+      formData.append('description', description);
+      formData.append('bookable', bookable);
+      formData.append('showInCalendar', showInCalendar);
+      for (let i = 0; i < photoFiles.length; i++) formData.append('photos', photoFiles[i]);
+
+      try {
+        // try dedicated endpoint first, fallback to rooms update when not available
+        let res = null;
+        try {
+          res = await fetch('/api/common-rooms/update', { method: 'POST', body: formData });
+        } catch (e) { res = null; }
+
+        if (res && res.ok) {
+          alert('Společný prostor byl aktualizován.');
+          renderRoomManagement();
+          return;
+        }
+
+        // fallback to rooms update endpoint (treat common as a room)
+        try {
+          const res2 = await fetch('/api/rooms/update', { method: 'POST', body: formData });
+          if (res2.ok) {
+            alert('Společný prostor byl aktualizován.');
+            renderRoomManagement();
+            return;
+          } else {
+            alert('Chyba při ukládání změn.');
+          }
+        } catch (e) {
+          console.error(e);
+          alert('Chyba při ukládání změn.');
+        }
+      } catch (e) {
+        console.error(e);
+        alert('Chyba při ukládání změn.');
+      }
+    }
+    
     let commonRoomsList = [];
     let roomsList = []; // <-- store regular rooms for name lookup
     async function loadCommonRooms() {
-      const res = await fetch('/api/common-rooms');
-      commonRoomsList = await res.json();
+      commonRoomsList = await fetchCommonRooms();
     }
     async function loadRoomsAdmin() {
       const res = await fetch('/api/rooms');
@@ -941,9 +1056,9 @@
 
       if (Array.isArray(booking.extraBeds) && booking.extraBeds.map(String).includes(String(rid))) {
         const ebFee = Number(room.extraBedFee || 0);
-        const ebTotal = ebFee * nights;
-        lines.push({ label: `${room.name} - přistýlka (${ebFee} Kč / noc) x ${nights}`, amount: ebTotal });
-        subtotal += ebTotal;
+        // Přistýlka je jednorázový poplatek (ne za noc)
+        lines.push({ label: `${room.name} - přistýlka`, amount: ebFee });
+        subtotal += ebFee;
       }
 
       if (Array.isArray(booking.cots) && booking.cots.map(String).includes(String(rid))) {

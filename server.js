@@ -6,6 +6,8 @@ const nodemailer = require('nodemailer');
 const config = require('./config.json');
 const multer = require('multer');
 const upload = multer({ dest: 'public/images/rooms/' });
+// separate upload destination for common room photos
+const uploadCommon = multer({ dest: 'public/images/common/' });
 const cookieParser = require('cookie-parser');
 const PORT = process.env.PORT || 3000;
 
@@ -489,37 +491,70 @@ app.post('/api/rooms/update', upload.array('photos', 10), (req, res) => {
      fs.writeFileSync('./data/rooms.json', JSON.stringify(rooms, null, 2));
      res.json({ success: true });
  });
-
-// Return only rooms that are bookable for the booking wizard
-app.get('/api/rooms/bookable', (req, res) => {
-  const rooms = JSON.parse(fs.readFileSync('./data/rooms.json'));
-  const bookable = rooms.filter(r => typeof r.bookable === 'undefined' ? true : Boolean(r.bookable));
-  res.json(bookable);
-});
  
- // Delete a photo from a room's album (remove reference and delete file)
-app.post('/api/rooms/:id/photos/delete', (req, res) => {
+// Update common room details (accepts photos via FormData)
+app.post('/api/common-rooms/update', uploadCommon.array('photos', 10), (req, res) => {
+    try {
+        const { id, name, price, capacity, description, group, bookable } = req.body || {};
+        const filePath = path.join(__dirname, 'data', 'common-rooms.json');
+        const rooms = readJsonFileSafe(filePath);
+        const idx = rooms.findIndex(r => r.id == id);
+        if (idx === -1) {
+            return res.status(404).json({ success: false, message: "Společný prostor nenalezen." });
+        }
+
+        if (typeof name !== 'undefined') rooms[idx].name = String(name);
+        rooms[idx].price = Number.isFinite(Number(price)) ? parseInt(price, 10) : rooms[idx].price;
+        rooms[idx].capacity = Number.isFinite(Number(capacity)) ? parseInt(capacity, 10) : rooms[idx].capacity;
+        if (typeof description !== 'undefined') rooms[idx].description = String(description);
+        if (typeof group !== 'undefined') {
+            const g = Array.isArray(group) ? (group[0] || '') : group;
+            rooms[idx].group = String(g);
+        }
+        if (typeof bookable !== 'undefined') rooms[idx].bookable = (bookable === 'true' || bookable === true);
+        if (typeof req.body.showInCalendar !== 'undefined') {
+            rooms[idx].showInCalendar = (req.body.showInCalendar === 'true' || req.body.showInCalendar === true);
+        }
+
+        // attach uploaded photos (filenames)
+        if (req.files && req.files.length > 0) {
+            rooms[idx].photos = rooms[idx].photos || [];
+            req.files.forEach(file => {
+                if (!rooms[idx].photos.includes(file.filename)) rooms[idx].photos.push(file.filename);
+            });
+        }
+
+        fs.writeFileSync(filePath, JSON.stringify(rooms, null, 2));
+        res.json({ success: true });
+    } catch (e) {
+        console.error('POST /api/common-rooms/update error', e);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Delete photo from a common room's album
+app.post('/api/common-rooms/:id/photos/delete', (req, res) => {
   try {
     const roomId = Number(req.params.id);
     const filename = req.body && req.body.filename;
-    if (!filename) return res.status(400).json({ success: false, message: 'Chybí název souboru.' });
+    if (!filename) return res.status(400).json({ success: false, message: 'Chybný název souboru.' });
 
-    const roomsPath = path.join(__dirname, 'data', 'rooms.json');
+    const roomsPath = path.join(__dirname, 'data', 'common-rooms.json');
     const rooms = readJsonFileSafe(roomsPath);
     const idx = rooms.findIndex(r => Number(r.id) === roomId);
-    if (idx === -1) return res.status(404).json({ success: false, message: 'Pokoj nenalezen.' });
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Prostor nenalezen.' });
 
     rooms[idx].photos = (rooms[idx].photos || []).filter(f => f !== filename);
     fs.writeFileSync(roomsPath, JSON.stringify(rooms, null, 2));
 
-    const filePath = path.join(__dirname, 'public', 'images', 'rooms', filename);
+    const filePath = path.join(__dirname, 'public', 'images', 'common', filename);
     if (fs.existsSync(filePath)) {
       try { fs.unlinkSync(filePath); } catch (e) { console.error('Failed to delete file', filePath, e); }
     }
 
     res.json({ success: true });
   } catch (e) {
-    console.error('Error deleting room photo', e);
+    console.error('Error deleting common room photo', e);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -615,28 +650,63 @@ Počet osob: ${booking.people || 0}
 
 function notifyBookingStatus(booking, status, isCommon) {
   const adminEmail = config.adminEmail || 'admin@cottage.local';
-  const subj = status === 'accepted'
-    ? `Rezervace potvrzena #${booking.id}`
-    : `Rezervace zamítnuta #${booking.id}`;
 
-  const customerText = (status === 'accepted')
-    ? `Dobrý den ${booking.name || ''},
+  let subjCustomer = '';
+  let textCustomer = '';
+  let subjAdmin = '';
+  let textAdmin = '';
+
+  if (status === 'accepted') {
+    subjCustomer = `Rezervace potvrzena #${booking.id}`;
+    textCustomer = `Dobrý den ${booking.name || ''},
 
 Vaše rezervace byla potvrzena.
 
-` + formatBookingSummary(booking, isCommon)
-    : `Dobrý den ${booking.name || ''},
+` + formatBookingSummary(booking, isCommon);
+
+    subjAdmin = `Rezervace potvrzena #${booking.id}`;
+    textAdmin = `ADMIN - Rezervace ACCEPTED:
+` + formatBookingSummary(booking, isCommon);
+  } else if (status === 'rejected') {
+    subjCustomer = `Rezervace zamítnuta #${booking.id}`;
+    textCustomer = `Dobrý den ${booking.name || ''},
 
 Omlouváme se, ale Vaše rezervace byla bohužel zamítnuta.
 
 ` + formatBookingSummary(booking, isCommon);
 
-  const adminText = `ADMIN - Rezervace ${status.toUpperCase()}:
+    subjAdmin = `Rezervace zamítnuta #${booking.id}`;
+    textAdmin = `ADMIN - Rezervace REJECTED:
+` + formatBookingSummary(booking, isCommon);
+  } else if (status === 'pending') {
+    // New pending booking: confirm receipt to customer, notify admin to review
+    subjCustomer = `Žádost o rezervaci přijata #${booking.id}`;
+    textCustomer = `Dobrý den ${booking.name || ''},
+
+Vaše žádost o rezervaci byla přijata a čeká na potvrzení správcem. Ozveme se Vám co nejdříve s dalším postupem.
+
 ` + formatBookingSummary(booking, isCommon);
 
+    subjAdmin = `Nová rezervace ke schválení #${booking.id}`;
+    textAdmin = `ADMIN - Rezervace PENDING (čeká na schválení):
+` + formatBookingSummary(booking, isCommon);
+  } else {
+    // Fallback: treat as pending notification to admin only
+    subjCustomer = `Žádost o rezervaci #${booking.id}`;
+    textCustomer = `Dobrý den ${booking.name || ''},
+
+Vaše žádost o rezervaci byla přijata.
+
+` + formatBookingSummary(booking, isCommon);
+
+    subjAdmin = `Nová rezervace #${booking.id}`;
+    textAdmin = `ADMIN - Rezervace:
+` + formatBookingSummary(booking, isCommon);
+  }
+
   // fire-and-forget
-  sendEmail(booking.email, subj, customerText, `<pre>${customerText}</pre>`).catch(()=>{});
-  sendEmail(adminEmail, subj, adminText, `<pre>${adminText}</pre>`).catch(()=>{});
+  sendEmail(booking.email, subjCustomer, textCustomer, `<pre>${textCustomer}</pre>`).catch(()=>{});
+  sendEmail(adminEmail, subjAdmin, textAdmin, `<pre>${textAdmin}</pre>`).catch(()=>{});
 }
 
 // Function to remove expired pending bookings

@@ -6,30 +6,48 @@
   <title>Rezervace ubytování</title>
   <link rel="stylesheet" href="booking.css" />
   <style>
+    /* match common wizard look & layout */
+    body{font-family:Arial,Helvetica,sans-serif;background:#f7f7f7;padding:20px}
+    .wizard{width:90%;max-width:1200px;margin:0 auto;background:#fff;padding:18px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
     .step { display: none; }
-    .step.active { display: block; }
-    .room-card {
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      margin: 10px 0;
-      padding: 10px;
-      background: #fff;
-      display: flex;
-      gap: 15px;
-      align-items: center;
+    .step.active { display: block; max-width:1100px; margin:0 auto; }
+    /* prevent full-width buttons from booking.css inside step bars */
+  .step-buttons{ margin-top:16px; display:flex; gap:10px; justify-content:flex-end }
+    .step-buttons button{ width:auto }
+    /* Consistent, narrower Next button width */
+    .next-btn{ width:140px }
+    /* Limit calendar block so Next aligns with calendar right edge */
+  #unified-flow-rooms{ max-width:420px; margin:0 auto }
+  /* Reserve space for sticky footer */
+  .wizard{ padding-bottom: 96px; }
+  /* Hide per-step button rows; footer will host nav */
+  .step .step-buttons{ display: none; }
+    /* arrows inherit .calendar-table button (neutral, no background) */
+
+    /* Step 2 rooms: reuse common wizard card visuals */
+    #rooms-list{display:block}
+    .common-room-card{border:3px solid #4CAF50;background:#fff;margin:0 auto 14px auto;padding:14px;max-width:900px;box-shadow:0 1px 6px rgba(0,0,0,0.06)}
+    .crc-main{display:flex;gap:16px;align-items:center}
+    .crc-image{width:200px;height:140px;object-fit:cover;background:#f2f2f2;cursor:pointer}
+    .crc-content{flex:1;min-width:0}
+    .crc-title{font-weight:700;color:#222;margin-bottom:6px}
+    .crc-desc{color:#444;line-height:1.4;white-space:pre-wrap;margin-bottom:8px}
+    .crc-stats{display:flex;gap:16px;color:#333;margin:6px 0}
+    .crc-stat{padding:6px 8px;border:1px solid #e6e6e6;background:#fafafa}
+    .crc-actions{display:flex;align-items:center;gap:12px;margin-top:8px;min-height:44px}
+    .crc-people{display:inline-flex;align-items:center;visibility:hidden;white-space:nowrap;margin-left:8px}
+    .crc-people.show{visibility:visible}
+    .crc-people input{width:64px;height:28px;text-align:center;font-size:0.95rem;margin-left:8px}
+    .crc-actions label, .crc-people label{display:inline-flex;align-items:center;margin:0;min-height:32px;line-height:32px;gap:8px}
+    .crc-actions input[type="checkbox"]{margin:0}
+    @media (max-width: 720px){
+      .crc-main{flex-direction:column}
+      .crc-image{width:100%;height:180px}
+      .common-room-card{padding:12px}
     }
-    .room-card img {
-      width: 120px;
-      height: 80px;
-      object-fit: cover;
-      border-radius: 5px;
-    }
-    .room-card input[type="checkbox"] {
-      margin-right: 10px;
-    }
+
     .summary-list { margin: 0 0 10px 0; padding: 0; }
     .summary-list li { list-style: none; margin-bottom: 5px; }
-    .step-buttons { margin-top: 20px; display: flex; gap: 10px; }
     #photo-modal {
       display:none;
       position:fixed;
@@ -64,18 +82,28 @@
       font-size:2rem;
       margin:0 30px;
     }
+
+    /* Sticky footer summary + controls */
+    .sticky-footer{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #e6e6e6;box-shadow:0 -2px 8px rgba(0,0,0,.06);z-index:900}
+    .sticky-footer .sf-inner{width:90%;max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 4px}
+    .footer-summary{font-size:.95rem;color:#333;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .footer-chip{padding:6px 8px;border:1px solid #e6e6e6;background:#fafafa}
+    .footer-buttons{display:flex;gap:10px}
+    .footer-buttons .next-btn{width:140px}
+    @media(max-width:720px){.sticky-footer .sf-inner{width:94%;gap:10px}.footer-summary{font-size:.9rem}}
   </style>
 </head>
 <body>
-  <form id="booking-form">
-
+  <form id="booking-form" class="wizard">
     <!-- Step 1: Date, people, rooms -->
     <div class="step active" id="step-1">
-      <label>Vyberte termín:</label>
-      <div id="calendar-container"></div>
-      <div id="selected-dates" style="margin:10px 0; color:#2196F3;"></div>
-      <div class="step-buttons">
-        <button type="button" id="to-step-2">Další</button>
+      <div id="unified-flow-rooms">
+        <p style="text-align:center">vyberte termín</p>
+        <div id="calendar-container"></div>
+        <div id="selected-dates" style="margin:10px 0; color:#2196F3;"></div>
+        <div class="step-buttons">
+          <button type="button" id="to-step-2" class="next-btn">Další</button>
+        </div>
       </div>
     </div>
 
@@ -85,7 +113,7 @@
       <div id="rooms-error" style="color:red; display:none;">Vyberte požadovaný počet pokojů.</div>
       <div class="step-buttons">
         <button type="button" id="back-to-1">Zpět</button>
-        <button type="button" id="to-step-3">Další</button>
+        <button type="button" id="to-step-3" class="next-btn">Další</button>
       </div>
     </div>
 
@@ -94,13 +122,13 @@
       <div id="services-list"></div>
       <div class="step-buttons">
         <button type="button" id="back-to-2">Zpět</button>
-        <button type="button" id="to-step-4">Další</button>
+        <button type="button" id="to-step-4" class="next-btn">Další</button>
       </div>
     </div>
 
     <!-- Step 4: Overview -->
     <div class="step" id="step-4">
-      <h3>Přehled rezervace</h3>
+      <h3 style="text-align:center">Přehled rezervace</h3>
       <ul class="summary-list" id="summary-list"></ul>
       <p><strong>Celková cena: <span id="total-price">0</span> Kč</strong></p>
       <label>Jméno:<br>
@@ -129,6 +157,16 @@
     </div>
   </div>
 
+  <div id="sticky-footer" class="sticky-footer">
+    <div class="sf-inner">
+      <div id="footer-summary" class="footer-summary"></div>
+      <div class="footer-buttons">
+        <button type="button" id="footer-back">Zpět</button>
+        <button type="button" id="footer-next" class="next-btn">Další</button>
+        <button type="button" id="footer-submit" style="display:none">Rezervovat</button>
+      </div>
+    </div>
+  </div>
   <script src="calendar.js"></script>
   <script src="booking-wizard.js"></script>
 </body>

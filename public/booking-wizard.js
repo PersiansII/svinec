@@ -71,36 +71,193 @@ function updateOrderSummary(stepNumber) {
     price = calculateTotalPrice();
   }
 
+  // Always update footer summary even if inline summary element is not present
+  renderFooterSummary(stepNumber);
+
+  // Update inline summary if the container exists (Step 2 keeps its own block)
   const summaryId = stepNumber === 2 ? 'order-summary-2' : 'order-summary-3';
   const el = document.getElementById(summaryId);
-  if (!el) return;
-  el.innerHTML = `
-    <div style="margin-top:12px; padding:10px; border-radius:8px; background:#fff; border:1px solid #e6e6e6;">
-      <div><strong>Datum:</strong> ${bookingState.startDate || '-'} – ${bookingState.endDate || '-'}</div>
-      <div><strong>Počet nocí:</strong> ${nights}</div>
-      <div><strong>Počet osob (součet po pokojích):</strong> ${peopleSum}</div>
-      <div><strong>Cena (vč. služeb):</strong> ${price} Kč</div>
-    </div>
-  `;
+  if (el) {
+    el.innerHTML = `
+      <div style="margin-top:12px; padding:10px; border-radius:0; background:#fff; border:1px solid #e6e6e6;">
+        <div><strong>Datum:</strong> ${bookingState.startDate || '-'} – ${bookingState.endDate || '-'}</div>
+        <div><strong>Počet nocí:</strong> ${nights}</div>
+        <div><strong>Počet osob (součet po pokojích):</strong> ${peopleSum}</div>
+        <div><strong>Cena (vč. služeb):</strong> ${price} Kč</div>
+      </div>
+    `;
+  }
 }
 
+function formatDateRange(start, end){
+  if (!start || !end) return '-';
+  return `${start} – ${end}`;
+}
+
+function renderFooterSummary(stepNumber){
+  const cont = document.getElementById('footer-summary');
+  if (!cont) return;
+  // For step 1, reflect live calendar selection (before persisting to bookingState)
+  let startISO = bookingState.startDate;
+  let endISO = bookingState.endDate;
+  if (stepNumber === 1 && typeof window.getSelectedDates === 'function') {
+    try {
+      const sel = window.getSelectedDates() || {};
+      if (sel.start) startISO = sel.start;
+      if (sel.end) endISO = sel.end;
+    } catch (e) {}
+  }
+  const start = startISO ? new Date(startISO) : null;
+  const end = endISO ? new Date(endISO) : null;
+  let nights = 0;
+  if (start && end) nights = Math.round((end - start) / (1000*60*60*24));
+  const roomIds = stepNumber === 2 ? selectedRooms : (bookingState.rooms || []);
+  let peopleSum = 0;
+  roomIds.forEach(id => {
+    const v = parseInt(document.getElementById(`occupancy-room-${id}`)?.value || '0', 10) || 0;
+    peopleSum += v;
+  });
+  let price = 0;
+  if (stepNumber === 2) {
+    roomIds.forEach(id => {
+      const r = roomsData.find(rr => rr.id === id);
+      if (r && startISO && endISO) {
+        price += getRoomPrice(r, startISO, endISO);
+      }
+    });
+  } else {
+    if (bookingState.rooms && bookingState.rooms.length) price = calculateTotalPrice();
+  }
+  const showPeople = stepNumber !== 1;
+  let chips = `
+    <div class="footer-chip"><strong>Datum:</strong> ${formatDateRange(startISO, endISO)}</div>
+    <div class="footer-chip"><strong>Nocí:</strong> ${nights}</div>
+  `;
+  if (showPeople) {
+    const ppl = peopleSum || bookingState.people || 0;
+    chips += `<div class="footer-chip"><strong>Osob:</strong> ${ppl}</div>`;
+  }
+  chips += `<div class="footer-chip"><strong>Cena:</strong> ${price} Kč</div>`;
+  cont.innerHTML = chips;
+}
+
+function updateFooterForStep(stepIdx){
+  const backBtn = document.getElementById('footer-back');
+  const nextBtn = document.getElementById('footer-next');
+  const submitBtn = document.getElementById('footer-submit');
+  if (!backBtn || !nextBtn || !submitBtn) return;
+  backBtn.style.display = stepIdx === 0 ? 'none' : '';
+  nextBtn.style.display = (stepIdx === 3) ? 'none' : '';
+  submitBtn.style.display = (stepIdx === 3) ? '' : 'none';
+  if (stepIdx === 0) {
+    const { start, end } = window.getSelectedDates ? window.getSelectedDates() : { start:null, end:null };
+    nextBtn.disabled = !(start && end && new Date(start) < new Date(end));
+  } else if (stepIdx === 1) {
+    const ok = selectedRooms.length>0 && selectedRooms.every(id => (parseInt(document.getElementById(`occupancy-room-${id}`)?.value||'0',10)||0) >= 1);
+    nextBtn.disabled = !ok;
+  } else if (stepIdx === 2) {
+    nextBtn.disabled = false;
+  } else if (stepIdx === 3) {
+    const name = document.getElementById('name')?.value?.trim();
+    const email = document.getElementById('email')?.value?.trim();
+    submitBtn.disabled = !(name && email);
+  }
+  renderFooterSummary(stepIdx+1);
+}
+
+// Footer nav hooks
+(function(){
+  const back = document.getElementById('footer-back');
+  const next = document.getElementById('footer-next');
+  const submit = document.getElementById('footer-submit');
+  if (back) back.addEventListener('click', () => {
+    if (document.getElementById('step-4')?.classList.contains('active')) return document.getElementById('back-to-3').click();
+    if (document.getElementById('step-3')?.classList.contains('active')) return document.getElementById('back-to-2').click();
+    if (document.getElementById('step-2')?.classList.contains('active')) return document.getElementById('back-to-1').click();
+  });
+  if (next) next.addEventListener('click', () => {
+    if (document.getElementById('step-1')?.classList.contains('active')) return document.getElementById('to-step-2').click();
+    if (document.getElementById('step-2')?.classList.contains('active')) return document.getElementById('to-step-3').click();
+    if (document.getElementById('step-3')?.classList.contains('active')) return document.getElementById('to-step-4').click();
+  });
+  if (submit) submit.addEventListener('click', () => {
+    document.getElementById('submit-btn')?.click();
+  });
+})();
+
+// keep footer summary live on final form fields
+['name','email','phone'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => updateFooterForStep(3));
+});
+
 async function loadRooms() {
-  const res = await fetch('/api/rooms/bookable');
-  roomsData = await res.json();
+  try {
+    let res = await fetch('/api/rooms/bookable');
+    if (!res.ok) {
+      // fallback to a more generic endpoint
+      res = await fetch('/api/rooms');
+    }
+    if (!res.ok) throw new Error(`Rooms endpoint returned ${res.status}`);
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('application/json')) {
+      roomsData = await res.json();
+    } else {
+      const txt = await res.text();
+      try { roomsData = JSON.parse(txt); } catch(e) { throw new Error('Rooms response not JSON'); }
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to load rooms:', err);
+    roomsData = [];
+    return false;
+  }
 }
+
 async function loadBookings() {
-  const res = await fetch('/api/bookings/all');
-  allBookings = await res.json();
+  try {
+    let res = await fetch('/api/bookings/all');
+    if (!res.ok) res = await fetch('/api/bookings');
+    if (!res.ok) throw new Error(`Bookings endpoint returned ${res.status}`);
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('application/json')) {
+      allBookings = await res.json();
+    } else {
+      const txt = await res.text();
+      try { allBookings = JSON.parse(txt); } catch(e) { throw new Error('Bookings response not JSON'); }
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to load bookings:', err);
+    allBookings = [];
+    return false;
+  }
 }
+
 async function loadSeasons() {
-  const res = await fetch('/api/seasons');
-  seasons = await res.json();
+  try {
+    let res = await fetch('/api/seasons');
+    if (!res.ok) { seasons = []; return true; }
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('application/json')) {
+      seasons = await res.json();
+    } else {
+      const txt = await res.text();
+      try { seasons = JSON.parse(txt); } catch(e) { seasons = []; }
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to load seasons:', err);
+    seasons = [];
+    return false;
+  }
 }
 
 function showStep(n) {
   document.querySelectorAll('.step').forEach((el, i) => {
     el.classList.toggle('active', i === n);
   });
+  updateFooterForStep(n);
 }
 
 function getAvailableRooms(startDate, endDate) {
@@ -143,107 +300,91 @@ function renderRoomsStep() {
   container.innerHTML = '';
   selectedRooms = [];
   const available = getAvailableRooms(bookingState.startDate, bookingState.endDate);
+
   available.forEach(room => {
+    const photos = (room.photos || []).length ? room.photos : ['default.jpg'];
     const card = document.createElement('div');
-    card.className = 'room-card';
-    // nicer card layout: photos left, info center, price prominent top-right
+    card.className = 'common-room-card';
     card.innerHTML = `
-      <div style="display:flex; gap:12px; align-items:flex-start; padding:10px; border-radius:8px; border:1px solid #e6e6e6; background:#fff;">
-        <div style="min-width:90px;">
-          <div style="display:flex; flex-direction:column; gap:6px;">
-            ${(room.photos || ['default.jpg']).map((photo, idx) =>
-              `<img src="/images/rooms/${photo}" alt="${room.name}" style="width:90px;height:68px;object-fit:cover;border-radius:6px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.08);" onclick='openPhotoModal(${JSON.stringify(room.photos || ['default.jpg'])},${idx})'>`
-            ).join('')}
+      <div class="crc-main">
+        <img class="crc-image" src="/images/rooms/${photos[0]}" alt="${room.name}">
+        <div class="crc-content">
+          <div class="crc-title">${room.name}</div>
+          <div class="crc-desc">${room.description || ''}</div>
+          <div class="crc-stats">
+            <div class="crc-stat">Cena za pobyt: <strong>${getRoomPrice(room, bookingState.startDate, bookingState.endDate)} Kč</strong></div>
+            <div class="crc-stat">Lůžek: <strong>${room.beds || 0}</strong></div>
           </div>
-        </div>
-
-        <div style="flex:1;">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div style="padding-right:12px;">
-              <div style="font-size:1.05rem; font-weight:700; color:#222;">${room.name}</div>
-              <div class="room-desc" style="margin-top:8px; color:#444; line-height:1.35; white-space:pre-wrap;">${room.description || ''}</div>
-              <div style="margin-top:10px; color:#666; font-size:0.95rem;">💤 ${room.beds} lůžek</div>
-            </div>
-
-            <div style="text-align:right; margin-left:8px;">
-              <div style="font-weight:800; font-size:1.25rem; color:#b33; background:linear-gradient(180deg,#fff6f6,#fff); padding:8px 12px; border-radius:8px; border:1px solid rgba(179,51,51,0.08);">
-                ${getRoomPrice(room, bookingState.startDate, bookingState.endDate)} Kč
-              </div>
-              <div style="font-size:0.85rem; color:#888; margin-top:6px;">celkem</div>
-            </div>
-          </div>
-
-          <div class="room-occupancy-container" id="occ-container-${room.id}" style="margin-top:10px; display:none;"></div>
-
-          <div style="margin-top:10px;">
-            <label style="display:inline-flex; align-items:center; gap:8px; font-weight:600; color:#333;">
-              <input type="checkbox" value="${room.id}" id="room-${room.id}">
-              Vybrat pokoj
+          <div class="crc-actions">
+            <label>
+              <input type="checkbox" class="room-cb" data-id="${room.id}"> Vybrat
             </label>
+            <div class="crc-people" data-id="${room.id}">
+              <label>Počet osob: <input type="number" min="1" max="${room.beds || 1}" value="1" class="people-input" id="occupancy-room-${room.id}" data-id="${room.id}"></label>
+            </div>
           </div>
         </div>
-      </div>
-    `;
-    const cb = card.querySelector('input');
+      </div>`;
 
-    cb.addEventListener('change', function() {
-      if (this.checked) {
-        if (!selectedRooms.includes(room.id)) selectedRooms.push(room.id);
-
-        // show occupancy input for this room
-        const occContainer = document.getElementById(`occ-container-${room.id}`);
-        if (occContainer) {
-          occContainer.style.display = 'block';
-          const cap = room && room.beds ? room.beds : 99;
-          // create input
-          occContainer.innerHTML = `<strong>Počet osob v tomto pokoji:</strong> `;
-          const input = document.createElement('input');
-          input.type = 'number';
-          input.id = `occupancy-room-${room.id}`;
-          input.min = 1;
-          input.max = String(Math.max(1, cap));
-          input.value = '1';
-          input.style.width = '80px';
-          input.style.marginLeft = '6px';
-          // update bookingState on input
-          input.addEventListener('input', () => {
-            let raw = parseInt(input.value || '0', 10) || 1;
-            raw = clamp(raw, 1, parseInt(input.max,10));
-            if (String(raw) !== input.value) input.value = String(raw);
-            bookingState.occupancy[room.id] = raw;
-            updateOccupancyLimits();
-            updateOrderSummary(2);
-          });
-          occContainer.appendChild(input);
-          // initialize bookingState for this room
-          bookingState.occupancy[room.id] = 1;
-        }
-
-        // Update summary and limits
-        updateOccupancyLimits();
-        updateOrderSummary(2);
-      } else {
-        // uncheck -> remove
-        selectedRooms = selectedRooms.filter(id => id !== room.id);
-        delete bookingState.occupancy[room.id];
-        const occContainer = document.getElementById(`occ-container-${room.id}`);
-        if (occContainer) { occContainer.style.display = 'none'; occContainer.innerHTML = ''; }
-        updateOccupancyLimits();
-        updateOrderSummary(2);
-      }
-    });
+    // Image opens gallery modal
+    const imgEl = card.querySelector('.crc-image');
+    imgEl.addEventListener('click', () => openPhotoModal(photos, 0));
 
     container.appendChild(card);
   });
 
+  // Attach behavior (mirror common step 2)
+  function updateSummary() { updateOrderSummary(2); }
+
+  container.querySelectorAll('.room-cb').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const id = (e.target.getAttribute('data-id'));
+      const roomId = isNaN(Number(id)) ? id : Number(id);
+      const room = roomsData.find(r => r.id === roomId);
+      const cap = room && room.beds ? room.beds : 1;
+      if (e.target.checked) {
+        if (!selectedRooms.includes(roomId)) selectedRooms.push(roomId);
+        const pplWrap = container.querySelector(`.crc-people[data-id="${roomId}"]`);
+        if (pplWrap) {
+          pplWrap.classList.add('show');
+          const input = pplWrap.querySelector('input');
+          if (input) {
+            input.min = '1';
+            input.max = String(Math.max(1, cap));
+            input.value = input.value && Number(input.value) >= 1 ? input.value : '1';
+            bookingState.occupancy[roomId] = clamp(parseInt(input.value||'1',10)||1, 1, parseInt(input.max,10));
+          }
+        }
+      } else {
+        selectedRooms = selectedRooms.filter(rid => rid !== roomId);
+        delete bookingState.occupancy[roomId];
+        const pplWrap = container.querySelector(`.crc-people[data-id="${roomId}"]`);
+        if (pplWrap) pplWrap.classList.remove('show');
+      }
+      updateOccupancyLimits();
+      updateSummary();
+      if (typeof updateFooterForStep === 'function') updateFooterForStep(1);
+    });
+  });
+
+  container.querySelectorAll('.people-input').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const id = (e.target.getAttribute('data-id'));
+      const roomId = isNaN(Number(id)) ? id : Number(id);
+      const max = parseInt(e.target.max || '1', 10);
+      let v = parseInt(e.target.value || '0', 10) || 1;
+      v = clamp(v, 1, max);
+      e.target.value = String(v);
+      bookingState.occupancy[roomId] = v;
+      updateOccupancyLimits();
+      updateSummary();
+      if (typeof updateFooterForStep === 'function') updateFooterForStep(1);
+    });
+  });
+
   // Add order summary container at bottom of step 2
-  let summaryEl = document.getElementById('order-summary-2');
-  if (!summaryEl) {
-    summaryEl = document.createElement('div');
-    summaryEl.id = 'order-summary-2';
-    container.appendChild(summaryEl);
-  }
   updateOrderSummary(2);
+  if (typeof updateFooterForStep === 'function') updateFooterForStep(1);
 }
 
 // evenly distribute bookingState.people across selected rooms (respect capacities)
@@ -357,7 +498,8 @@ function calculateTotalPrice() {
   });
   bookingState.extraBeds.forEach(id => {
     const room = roomsData.find(r => r.id === id);
-    if (room && typeof room.extraBedFee !== 'undefined' && Number(room.extraBedFee) >= 0) total += Number(room.extraBedFee) * ((new Date(bookingState.endDate) - new Date(bookingState.startDate)) / (1000*60*60*24));
+    // Přistýlka: flat fee (not per night)
+    if (room && typeof room.extraBedFee !== 'undefined' && Number(room.extraBedFee) >= 0) total += Number(room.extraBedFee);
   });
   // cots and bike storage are one-time fees
   bookingState.cots.forEach(id => {
@@ -388,9 +530,19 @@ document.getElementById('to-step-2').onclick = async function() {
   }
   bookingState.startDate = startDate;
   bookingState.endDate = endDate;
-  await loadRooms();
-  await loadBookings();
-  await loadSeasons();
+
+  // Load required data with error handling
+  const okRooms = await loadRooms();
+  if (!okRooms) {
+    alert('Nepodařilo se načíst seznam pokojů ze serveru. Zkuste to prosím znovu později nebo zkontrolujte server.');
+    return;
+  }
+  const okBookings = await loadBookings();
+  if (!okBookings) {
+    // still proceed but warn user (empty bookings = conservative availability)
+    console.warn('Bookings could not be loaded; continuing with empty bookings list.');
+  }
+  await loadSeasons(); // seasons are optional; failures result in empty seasons
   renderRoomsStep();
   showStep(1);
 };
@@ -605,6 +757,10 @@ document.getElementById('photo-modal').onclick = function(e) {
 function renderServicesStep() {
   const container = document.getElementById('services-list');
   container.innerHTML = '';
+  // Ensure legacy inline summary for step 3 is removed
+  const oldSummary3 = document.getElementById('order-summary-3');
+  if (oldSummary3) oldSummary3.remove();
+    container.innerHTML += '<h3 style="margin: 0 0 10px 0;">Služby</h3>';
 
   // Per-room service options (occupancy inputs are managed in Step 2)
   bookingState.rooms.forEach(roomId => {
@@ -631,7 +787,7 @@ function renderServicesStep() {
       container.innerHTML += `
         <label>
           <input type="checkbox" id="${id}">
-          ${room.name} přistýlka (+${room.extraBedFee} Kč / noc)
+          ${room.name} přistýlka (+${room.extraBedFee} Kč)
         </label><br>
       `;
     }
@@ -673,14 +829,6 @@ function renderServicesStep() {
       </div>
     </div>
   `;
-
-  // Add order summary for Step 3
-  let summaryEl = document.getElementById('order-summary-3');
-  if (!summaryEl) {
-    summaryEl = document.createElement('div');
-    summaryEl.id = 'order-summary-3';
-    container.appendChild(summaryEl);
-  }
 
   // Attach listeners to service inputs so summary updates automatically
   // Use a short timeout so elements exist in DOM
@@ -773,7 +921,7 @@ function renderServicesStep() {
       });
     }
 
-    // Initial summary render
+    // Initial footer summary render
     updateOrderSummary(3);
    }, 0);
  }

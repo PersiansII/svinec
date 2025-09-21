@@ -110,5 +110,30 @@
     "occupancy": {
       "2": 1
     }
+  },
+  {
+    "id": 1758467725940,
+    "startDate": "2025-09-21",
+    "endDate": "2025-09-22",
+    "rooms": [
+      1
+    ],
+    "people": 1,
+    "name": "Adam Král",
+    "email": "adam.kral@gnj.cz",
+    "phone": "739418927",
+    "createdAt": "2025-09-21T15:15:25.940Z",
+    "dogs": [
+      1
+    ],
+    "extraBeds": [],
+    "cots": [],
+    "bikes": [],
+    "breakfast": true,
+    "breakfastPeople": 1,
+    "totalPrice": 400,
+    "occupancy": {
+      "1": 1
+    }
   }
 ]

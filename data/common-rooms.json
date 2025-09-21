@@ -1,7 +1,77 @@
 [
-  { "id": 1, "name": "Zahrádka", "capacity": 60, "pricePerHour": 10 },
-  { "id": 2, "name": "Jídelna", "capacity": 40, "pricePerHour": 800 },
-  { "id": 3, "name": "Krbovna", "capacity": 20, "pricePerHour": 500 },
-  { "id": 4, "name": "Restaurace", "capacity": 40, "pricePerHour": 900 },
-  { "id": 5, "name": "Ohniště", "capacity": 40, "pricePerHour": 400 }
+  {
+    "id": 1,
+    "name": "Zahrádka",
+    "capacity": 60,
+    "pricePerHour": 10,
+    "price": 10,
+    "description": "Krásná zahrádky až pro 60 hostů se střechou pro případ, že počasí nebude ideální!\r\n\r\nPohodlné sezení se stoly.\r\n\r\nVenkovní gril\r\n\r\nElektřina a wi-fi k dispozici pro hosty s laptopy",
+    "group": "prostory",
+    "bookable": true,
+    "showInCalendar": true,
+    "photos": [
+      "5f47421b0aba5e580186f124e24d2e63",
+      "dff131b6c4398b77ca4b4f3d31066a3e",
+      "fd3124ba1bbe2378ae50fe370a1b65e7"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Jídelna",
+    "capacity": 40,
+    "pricePerHour": 800,
+    "price": 10,
+    "description": "Výborná jídelna pro naše jedlíky!",
+    "group": "prostory",
+    "bookable": true,
+    "showInCalendar": true,
+    "photos": [
+      "b7c7d3511378bacf06e4bc785a81ed5a",
+      "f5dfd3083615bc7c07a861506b897800",
+      "9de47eece79e3b7a617eecb9a5ec290e"
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Krbovna",
+    "capacity": 20,
+    "pricePerHour": 500,
+    "price": 10,
+    "description": "Posezení u krbu!",
+    "group": "prostory",
+    "bookable": true,
+    "showInCalendar": true,
+    "photos": [
+      "eaf4fbe7349d25705d3c8cbc042e653c",
+      "9673f9a372471ca8c7271bcb9e7699c7",
+      "f936b47c80586d0f2446125ed3a6d615"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "Restaurace",
+    "capacity": 40,
+    "pricePerHour": 900,
+    "price": 10,
+    "description": "Krásná restaurace v teple a suchu na vrcholu kopce.",
+    "group": "prostory",
+    "bookable": true,
+    "showInCalendar": true,
+    "photos": [
+      "e55706a606757796c4430f9b330d2cd3",
+      "43a0ad5192a7f8c6fce266542f3258b0",
+      "94b4d10659346985671f6cbbd6eba3e2"
+    ]
+  },
+  {
+    "id": 5,
+    "name": "Ohniště",
+    "capacity": 40,
+    "pricePerHour": 400,
+    "price": 10,
+    "description": "Posezení u ohniště",
+    "group": "prostory",
+    "bookable": true,
+    "showInCalendar": true
+  }
 ]

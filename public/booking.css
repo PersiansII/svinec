@@ -63,6 +63,17 @@ button:hover {
   background-color: #45a049;
 }
 
+/* Disabled buttons: greyed out and non-interactive */
+button:disabled {
+  background-color: #c8c8c8 !important;
+  color: #666 !important;
+  cursor: not-allowed !important;
+  opacity: 0.85;
+}
+button:disabled:hover {
+  background-color: #c8c8c8 !important;
+}
+
 #beds-warning {
   color: red;
   font-weight: bold;
@@ -139,3 +150,6 @@ p {
 .calendar-table button:hover {
   color: #0d47a1;
 }
+
+/* Global reset: remove rounded corners */
+* { border-radius: 0 !important; }

@@ -35,6 +35,28 @@ function renderCalendar() {
     monthYear.textContent = currentDate.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
   }
 
+  // disable "prev" when we are already showing the current period (month or week)
+  (function updatePrevButtonState(){
+    const prevBtn = document.getElementById('prev-month');
+    if (!prevBtn) return;
+    const today = new Date(); today.setHours(0,0,0,0);
+    let disablePrev = false;
+    if (mode === 'month') {
+      // disable if viewing current month/year
+      disablePrev = (visibleStart.getFullYear() === today.getFullYear() && visibleStart.getMonth() === today.getMonth());
+    } else {
+      // week mode: compute monday-start for today and compare
+      const todayWeekDay = (today.getDay() + 6) % 7; // 0=Mon
+      const todayWeekStart = new Date(today);
+      todayWeekStart.setDate(today.getDate() - todayWeekDay);
+      todayWeekStart.setHours(0,0,0,0);
+      disablePrev = (visibleStart.getTime() === todayWeekStart.getTime());
+    }
+    prevBtn.disabled = !!disablePrev;
+    // add/remove a11y attribute
+    prevBtn.setAttribute('aria-disabled', disablePrev ? 'true' : 'false');
+  })();
+
   // fetch data and render half-day calendar for the visible range
   fetch('/api/rooms')
     .then(res => res.json())
@@ -90,6 +112,10 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
   if (!container) return;
   container.innerHTML = '';
 
+  // today's date at midnight for comparisons
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
   const year = visibleStart.getFullYear();
   const month = visibleStart.getMonth();
 
@@ -111,6 +137,8 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
     date.setHours(0,0,0,0);
     const th = document.createElement('th');
     th.textContent = weekdayNames[date.getDay()];
+    // grey out header days before today
+    if (date.getTime() < today.getTime()) th.classList.add('past');
     weekRow.appendChild(th);
   }
   thead.appendChild(weekRow);
@@ -125,6 +153,8 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
     const th = document.createElement('th');
     th.textContent = date.getDate();
     if (date.toDateString() === new Date().toDateString()) th.setAttribute('data-today','true');
+    // grey out date numbers before today
+    if (date.getTime() < today.getTime()) th.classList.add('past');
     dateRow.appendChild(th);
   }
   thead.appendChild(dateRow);
@@ -144,8 +174,21 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
     const morningEnd = new Date(D); morningEnd.setHours(12,0,0,0);
     const afternoonStart = new Date(D); afternoonStart.setHours(12,0,0,0);
     const afternoonEnd = new Date(D); afternoonEnd.setHours(24,0,0,0);
-    const morning = (S < morningEnd) && (E > morningStart);
-    const afternoon = (S < afternoonEnd) && (E > afternoonStart);
+
+    // basic overlap tests
+    let morning = (S < morningEnd) && (E > morningStart);
+    let afternoon = (S < afternoonEnd) && (E > afternoonStart);
+
+    // Special rule: room bookings always start in the afternoon.
+    // If this booking is a room booking and its start date equals D,
+    // do not mark the morning of D as occupied (arrival happens later).
+    if (booking.type === 'room') {
+      const SdateOnly = new Date(S); SdateOnly.setHours(0,0,0,0);
+      if (SdateOnly.getTime() === morningStart.getTime()) {
+        morning = false;
+      }
+    }
+
     return { morning, afternoon };
   }
 
@@ -192,7 +235,8 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
   const roomOccRow = document.createElement('tr');
   roomOccRow.className = 'occ-row';
   const roomLabel = document.createElement('td');
-  roomLabel.textContent = 'Obsazenost pokojů';
+  // short label per request
+  roomLabel.textContent = 'pokoje';
   roomLabel.style.fontWeight = '600';
   roomLabel.style.padding = '6px';
   roomOccRow.appendChild(roomLabel);
@@ -200,7 +244,8 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
   const commonOccRow = document.createElement('tr');
   commonOccRow.className = 'occ-row';
   const commonLabel = document.createElement('td');
-  commonLabel.textContent = 'Obsazenost spol.';
+  // short label per request
+  commonLabel.textContent = 'prostory';
   commonLabel.style.fontWeight = '600';
   commonLabel.style.padding = '6px';
   commonOccRow.appendChild(commonLabel);
@@ -224,7 +269,8 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
 
     const roomsPercent = totalRoomsCount ? Math.min(100, Math.round((bookedRoomsCount / totalRoomsCount) * 100)) : 0;
     const tdRooms = document.createElement('td');
-    tdRooms.textContent = `${roomsPercent}%`;
+    // percentage removed — cell shows only color
+    tdRooms.textContent = '';
     const rc = occupancyColors(roomsPercent);                     // <-- apply colors inline
     tdRooms.classList.add(occupancyClass(roomsPercent));
     tdRooms.style.background = rc.bg;
@@ -232,6 +278,8 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
     tdRooms.setAttribute('title', `Obsazeno pokojů: ${bookedRoomsCount} / ${totalRoomsCount}`);
     tdRooms.style.textAlign = 'center';
     tdRooms.style.padding = '4px';
+    // match calendar greying: mark occupancy cell as past when the date is before today
+    if (D.getTime() < today.getTime()) tdRooms.classList.add('past');
     roomOccRow.appendChild(tdRooms);
 
     // count booked common rooms: common room is booked if any confirmed common booking overlaps date D and includes that common room id
@@ -250,7 +298,8 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
 
     const commonPercent = totalCommonCount ? Math.min(100, Math.round((bookedCommonCount / totalCommonCount) * 100)) : 0;
     const tdCommon = document.createElement('td');
-    tdCommon.textContent = `${commonPercent}%`;
+    // percentage removed — cell shows only color
+    tdCommon.textContent = '';
     const cc = occupancyColors(commonPercent);                    // <-- apply colors inline
     tdCommon.classList.add(occupancyClass(commonPercent));
     tdCommon.style.background = cc.bg;
@@ -258,6 +307,8 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
     tdCommon.setAttribute('title', `Obsazeno společných: ${bookedCommonCount} / ${totalCommonCount}`);
     tdCommon.style.textAlign = 'center';
     tdCommon.style.padding = '4px';
+    // also grey out common-rooms occupancy cells for past dates
+    if (D.getTime() < today.getTime()) tdCommon.classList.add('past');
     commonOccRow.appendChild(tdCommon);
   }
 
@@ -269,12 +320,38 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
   combined.forEach(room => {
     const tr = document.createElement('tr');
     const tdName = document.createElement('td');
-    tdName.textContent = room.name + (room.__type === 'common' ? ' (spol.)' : '');
+    // show only the room name (no "(spol.)" suffix)
+    tdName.textContent = room.name;
     tr.appendChild(tdName);
+
+    // --- NEW: compute booking start/end flags per half for this room/common ---
+    const startFlags = {}; // keys like "0-m" or "3-a"
+    const endFlags = {};
+    (allBookings || []).forEach(b => {
+      const relevant = (room.__type === 'room' && b.type === 'room') || (room.__type === 'common' && b.type === 'common');
+      if (!relevant) return;
+      if (!b.rooms || !b.rooms.includes(room.id)) return;
+
+      const occupied = [];
+      for (let k = 0; k < visibleDays; k++) {
+        const Dk = dayDateFromStart(k);
+        const occ = bookingOccupiesHalf(b, room.id, Dk);
+        if (occ.morning) occupied.push(`${k}-m`);
+        if (occ.afternoon) occupied.push(`${k}-a`);
+      }
+      if (occupied.length === 0) return;
+      // first and last occupied halves mark booking boundaries
+      startFlags[occupied[0]] = true;
+      endFlags[occupied[occupied.length - 1]] = true;
+    });
+    // --- end new ---
 
     for (let i = 0; i < visibleDays; i++) {
       const D = dayDateFromStart(i);
       const td = document.createElement('td');
+
+      // grey out whole cell for days before today
+      if (D.getTime() < today.getTime()) td.classList.add('past');
 
       const cell = document.createElement('div');
       cell.className = 'half-cell';
@@ -359,9 +436,9 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
         else afternoonState = 'available';
       }
 
-      // apply classes (include new 'checkout' class)
-      morningSpan.classList.remove('available','booked','pending','partial','checkout');
-      afternoonSpan.classList.remove('available','booked','pending','partial');
+      // apply classes (include new 'checkout' class) and clear boundary classes first
+      morningSpan.classList.remove('available','booked','pending','partial','checkout','booking-start','booking-end');
+      afternoonSpan.classList.remove('available','booked','pending','partial','booking-start','booking-end');
 
       if (morningState === 'checkout') {
         morningSpan.classList.add('checkout');
@@ -371,6 +448,13 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
 
       afternoonSpan.classList.add(afternoonState === 'booked' ? 'booked' : (afternoonState === 'pending' ? 'pending' : (afternoonState === 'partial' ? 'partial' : 'available')));
 
+      // --- NEW: add booking boundary classes when this half is the first/last of a booking ---
+      if (startFlags[`${i}-m`]) morningSpan.classList.add('booking-start');
+      if (endFlags[`${i}-m`]) morningSpan.classList.add('booking-end');
+      if (startFlags[`${i}-a`]) afternoonSpan.classList.add('booking-start');
+      if (endFlags[`${i}-a`]) afternoonSpan.classList.add('booking-end');
+      // --- end new ---
+
       cell.appendChild(morningSpan);
       cell.appendChild(afternoonSpan);
 
@@ -378,8 +462,7 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
       const isWeekend = D.getDay() === 0 || D.getDay() === 6;
       if (isWeekend) td.classList.add("weekend");
 
-      // Mark today column
-      const today = new Date(); today.setHours(0,0,0,0);
+      // Mark today column (use the outer 'today' variable; do NOT redeclare it)
       if (D.getTime() === today.getTime()) {
         td.classList.add('today-column');
       }
@@ -396,10 +479,12 @@ function renderHalfDayCalendar(rooms, commonRooms, allBookings, visibleStart, vi
 
   const legend = document.createElement('div');
   legend.className = 'half-legend';
-  legend.innerHTML = `<div class="item"><span class="sw booked"></span> Plně obsazeno</div>
-                      <div class="item"><span class="sw partial"></span> Částečně obsazeno</div>
-                      <div class="item"><span class="sw pending"></span> Čekající</div>
-                      <div class="item"><span class="sw available"></span> Volné</div>
-                      <div class="item"><span class="sw checkout" style="background:#0095ff; width:18px; height:12px; display:inline-block; border-radius:4px;"></span> Odjezd (ráno)</div>`;
+  // simplified legend: red = obsazeno, yellow = částečně obsazeno / čekající, green = volno
+  legend.innerHTML = `
+    <div class="item"><span class="sw booked"></span> obsazeno</div>
+    <div class="item"><span class="sw partial"></span> částečně obsazeno / čekající</div>
+    <div class="item"><span class="sw available"></span> volno</div>
+  `;
   container.appendChild(legend);
 }
+
